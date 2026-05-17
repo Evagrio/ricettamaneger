@@ -169,6 +169,57 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 .sri { padding:10px 12px; border-radius:8px; cursor:pointer; border-bottom:1px solid var(--border); transition:background .15s; }
 .sri:hover { background:var(--surface2); }
 
+/* NOTES PANEL */
+.notes-toggle { display:flex; align-items:center; gap:6px; width:100%; background:none; border:none; border-top:1px solid var(--border); padding:8px 16px; cursor:pointer; color:var(--dim); font-family:'Nunito',sans-serif; font-size:0.78rem; font-weight:600; transition:all .15s; text-align:left; }
+.notes-toggle:hover { color:var(--text); background:var(--surface2); }
+.notes-toggle .nt-arrow { margin-left:auto; transition:transform .2s; font-size:0.7rem; }
+.notes-toggle.open .nt-arrow { transform:rotate(180deg); }
+.notes-panel { display:none; padding:10px 14px 12px; border-top:1px solid var(--border); background:var(--surface2); }
+.notes-panel.open { display:block; }
+.notes-ta { width:100%; background:var(--surface); border:1px solid var(--border-hi); border-radius:8px; color:var(--text); font-family:'Nunito',sans-serif; font-size:0.83rem; padding:9px 11px; resize:vertical; min-height:70px; outline:none; transition:border-color .15s; }
+.notes-ta:focus { border-color:var(--gold); }
+.notes-save { margin-top:7px; font-size:0.75rem; }
+
+/* EXPIRY INFO ROW */
+.expiry-row { display:flex; gap:6px; flex-wrap:wrap; padding:8px 14px 10px; border-top:1px solid var(--border); }
+.expiry-chip { display:flex; align-items:center; gap:5px; font-family:'Inconsolata',monospace; font-size:0.68rem; padding:3px 9px; border-radius:20px; border:1px solid var(--border-hi); color:var(--muted); background:var(--surface2); }
+.expiry-chip.exp-ok     { color:var(--green);  border-color:var(--green);  background:var(--green-bg); }
+.expiry-chip.exp-warn   { color:var(--amber);  border-color:var(--amber);  background:var(--amber-bg); }
+.expiry-chip.exp-urgent { color:var(--red);    border-color:var(--red);    background:var(--red-bg);   }
+.expiry-chip.exp-none   { color:var(--dim);    border-color:var(--border); }
+.load-log { display:flex; flex-direction:column; gap:5px; max-height:220px; overflow-y:auto; margin-top:8px; }
+.load-entry { display:flex; align-items:center; justify-content:space-between; background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:7px 10px; font-family:'Inconsolata',monospace; font-size:0.75rem; color:var(--muted); }
+.load-entry .le-date { color:var(--text); font-weight:600; }
+.load-entry .le-del { background:none; border:none; cursor:pointer; color:var(--dim); font-size:0.8rem; padding:2px 5px; border-radius:4px; transition:all .15s; }
+.load-entry .le-del:hover { background:var(--red-bg); color:var(--red); }
+.load-empty { font-size:0.78rem; color:var(--dim); padding:8px 4px; }
+
+/* PRINT */
+@media print {
+  header, .alert-banner, .toolbar, .drow-controls, .add-drug-btn, .pcard-actions, .drow-actions { display:none !important; }
+  body { background:#fff; color:#111; }
+  .container { padding:0; max-width:100%; }
+  .grid { display:block; }
+  .pcard { border:1.5px solid #ccc; border-radius:8px; margin-bottom:24px; page-break-inside:avoid; background:#fff; box-shadow:none; }
+  .pcard-head { border-bottom:1.5px solid #eee; padding:12px 14px 10px; }
+  .pname { font-size:1.1rem; color:#111; }
+  .pmeta { color:#666; font-size:0.7rem; }
+  .drow { background:#f9f9f9 !important; border:1px solid #ddd !important; margin-bottom:6px; }
+  .drow.urgent { background:#fff0f0 !important; border-color:#e05252 !important; }
+  .drow.warn   { background:#fff8f0 !important; border-color:#e8913a !important; }
+  .sdot { animation:none !important; }
+  .sdot.ok     { background:#22c55e; }
+  .sdot.warn   { background:#e8913a; }
+  .sdot.urgent { background:#e05252; }
+  .dname { color:#111; } .ddose { color:#555; }
+  .pbar-track { background:#e5e7eb; }
+  .pbar-fill.ok { background:#22c55e; } .pbar-fill.warn { background:#e8913a; } .pbar-fill.urgent { background:#e05252; }
+  .stock-text { color:#444; } .stock-text strong { color:#111; }
+  .badge.urgent { background:#e05252; } .badge.warn { background:#e8913a; }
+  .print-only { display:block !important; }
+}
+.print-only { display:none; }
+
 @keyframes fadeIn { from{opacity:0} to{opacity:1} }
 ::-webkit-scrollbar { width:5px; } ::-webkit-scrollbar-track { background:var(--bg); } ::-webkit-scrollbar-thumb { background:var(--border-hi); border-radius:3px; }
 </style>
@@ -199,6 +250,7 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
     </div>
     <div class="tbar-right">
       <button class="btn btn-ghost btn-sm" onclick="render()">⟳ Aggiorna</button>
+      <button class="btn btn-ghost btn-sm" onclick="printInventory()" title="Inventario completo PDF">📄 Inventario</button>
       <button class="btn btn-ghost btn-sm" onclick="exportData()" title="Esporta backup dati">💾 Esporta</button>
       <button class="btn btn-ghost btn-sm" onclick="document.getElementById('importFile').click()" title="Importa backup dati">📂 Importa</button>
       <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
@@ -209,12 +261,26 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 
 <!-- MODAL: Paziente -->
 <div class="overlay" id="ovPatient">
-  <div class="modal">
+  <div class="modal" style="max-width:500px; max-height:90vh; overflow-y:auto;">
     <h3 id="ptTitle">Nuovo paziente</h3>
     <div class="fg"><label class="fl">Nome e cognome</label><input class="fi" id="ptName" placeholder="es. Mario Rossi"></div>
     <div class="frow">
       <div class="fg"><label class="fl">Codice / ID</label><input class="fi" id="ptCode" placeholder="es. P001"></div>
       <div class="fg"><label class="fl">Data di nascita</label><input class="fi" type="date" id="ptDob"></div>
+    </div>
+    <div class="frow">
+      <div class="fg">
+        <label class="fl">Scadenza Tessera Sanitaria</label>
+        <input class="fi" type="date" id="ptTessera">
+      </div>
+      <div class="fg">
+        <label class="fl">Scadenza Medico di Base</label>
+        <input class="fi" type="date" id="ptMedico">
+      </div>
+    </div>
+    <div class="fg">
+      <label class="fl">Note iniziali (opzionale)</label>
+      <textarea class="fi notes-ta" id="ptNotes" placeholder="Promemoria, annotazioni..." style="min-height:60px;resize:vertical;"></textarea>
     </div>
     <div class="mfooter">
       <button class="btn btn-ghost" onclick="closeOv('ovPatient')">Annulla</button>
@@ -256,8 +322,23 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
   </div>
 </div>
 
-<!-- MODAL: Cerca -->
-<div class="overlay" id="ovSearch">
+<!-- MODAL: Storico caricamenti -->
+<div class="overlay" id="ovHistory">
+  <div class="modal" style="max-width:520px">
+    <h3 id="histTitle">Storico confezioni</h3>
+    <div id="histDrugName" style="font-family:'Inconsolata',monospace;font-size:0.78rem;color:var(--muted);margin-bottom:14px;"></div>
+    <div class="load-log" id="histLog"></div>
+    <div class="mfooter">
+      <button class="btn btn-ghost" onclick="closeOv('ovHistory')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<!-- PRINT HEADER (visibile solo in stampa) -->
+<div class="print-only" id="printHeader" style="padding:0 0 12px;border-bottom:2px solid #ccc;margin-bottom:18px;">
+  <strong style="font-size:1.1rem;">RicettaManager — Inventario terapie</strong>
+  <span style="float:right;font-size:0.75rem;color:#888;" id="printDate"></span>
+</div>
   <div class="modal">
     <h3>Cerca paziente</h3>
     <input class="fi" id="sQ" placeholder="Nome o codice..." oninput="doSearch()">
@@ -318,12 +399,23 @@ function updateHeader() {
 // ── ALERTS ────────────────────────────────────────────────────────────────
 function refreshAlerts() {
   const urgent=[], warn=[];
-  patients.forEach(p => p.drugs.forEach(d => {
-    const s = computeDrug(d).status;
-    const lbl = `${p.name} · ${d.name}`;
-    if (s==='urgent') urgent.push(lbl);
-    else if (s==='warn') warn.push(lbl);
-  }));
+  patients.forEach(p => {
+    // Drug alerts
+    p.drugs.forEach(d => {
+      const s = computeDrug(d).status;
+      const lbl = `${p.name} · ${d.name}`;
+      if (s==='urgent') urgent.push(lbl);
+      else if (s==='warn') warn.push(lbl);
+    });
+    // Expiry alerts: tessera + medico
+    [{label:'Tessera', date:p.tessera},{label:'Medico', date:p.medico}].forEach(({label, date}) => {
+      if (!date) return;
+      const days = daysBetween(today(), date);
+      const lbl  = `${p.name} · ${label}`;
+      if (days < 0)      urgent.push(lbl + ' (scaduto)');
+      else if (days <= 30) warn.push(lbl + ` (${days}gg)`);
+    });
+  });
   const banner = document.getElementById('alertBanner');
   const inner  = document.getElementById('alertInner');
   const total  = urgent.length + warn.length;
@@ -336,8 +428,8 @@ function refreshAlerts() {
   const isUrgent = urgent.length > 0;
   inner.className = 'alert-inner ' + (isUrgent ? 'urgent' : 'warn');
   document.getElementById('alertTtl').textContent = isUrgent
-    ? `⚠ ${urgent.length} farmac${urgent.length>1?'i':'o'} esaurit${urgent.length>1?'i':'o'} — ricetta urgente`
-    : `📦 ${warn.length} farmac${warn.length>1?'i':'o'} all'ultima confezione`;
+    ? `⚠ ${urgent.length} alert urgent${urgent.length>1?'i':'o'}`
+    : `📋 ${warn.length} scadenz${warn.length>1?'e':'a'} in avvicinamento`;
   document.getElementById('alertChips').innerHTML =
     [...urgent.map(l=>`<span class="chip urgent">${l}</span>`),
      ...warn.map(l=>`<span class="chip warn">${l}</span>`)].join('');
@@ -390,6 +482,7 @@ function render(filterIds) {
               </div>
             </div>
             <div class="drow-actions">
+              <button class="bico" title="Storico caricamenti" onclick="openHistory('${patient.id}','${drug.id}')">📋</button>
               <button class="bico" title="Modifica" onclick="openEditDrug('${patient.id}','${drug.id}')">✎</button>
               <button class="bico del" title="Elimina" onclick="deleteDrug('${patient.id}','${drug.id}')">✕</button>
             </div>
@@ -422,17 +515,46 @@ function render(filterIds) {
 
     const code = patient.code ? `<div class="pmeta">${patient.code}${patient.dob?' · '+new Date(patient.dob+'T12:00').toLocaleDateString('it-IT'):''}</div>` : '';
 
+    // Expiry chips
+    function expiryChip(label, dateStr) {
+      if (!dateStr) return `<span class="expiry-chip exp-none">🪪 ${label}: —</span>`;
+      const days = daysBetween(today(), dateStr);
+      const cls  = days < 0 ? 'exp-urgent' : days <= 30 ? 'exp-warn' : 'exp-ok';
+      const icon = days < 0 ? '❌' : days <= 30 ? '⚠️' : '✓';
+      const txt  = days < 0 ? `scadut${days===-1?'a':'a'} ${Math.abs(days)}gg fa` : days === 0 ? 'scade oggi' : `${days}gg`;
+      return `<span class="expiry-chip ${cls}">${icon} ${label}: ${txt}</span>`;
+    }
+    const tesseraChip = expiryChip('Tessera', patient.tessera);
+    const medicoChip  = expiryChip('Medico', patient.medico);
+
+    // Notes panel
+    const hasNotes = patient.notes && patient.notes.trim();
+    const notesLabel = hasNotes ? '📝 Note' : '📝 Aggiungi nota';
+
     grid.innerHTML += `
       <div class="pcard s-${ws}" id="card-${patient.id}">
         <div class="pcard-head">
           <div><div class="pname">${patient.name}</div>${code}</div>
           <div class="pcard-actions">
+            <button class="btn btn-ghost btn-sm" onclick="printPatient('${patient.id}')" title="Stampa inventario">🖨️</button>
             <button class="btn btn-ghost btn-sm" onclick="openEditPatient('${patient.id}')">✎</button>
             <button class="btn btn-red btn-sm" onclick="delPatient('${patient.id}')">✕</button>
           </div>
         </div>
+        <div class="expiry-row">${tesseraChip}${medicoChip}</div>
         <div class="drug-list">${rows}</div>
         <button class="add-drug-btn" onclick="openAddDrug('${patient.id}')">＋ Aggiungi farmaco</button>
+        <button class="notes-toggle" id="nt-${patient.id}" onclick="toggleNotes('${patient.id}')">
+          ${notesLabel}
+          ${hasNotes ? `<span style="font-family:Inconsolata,monospace;font-size:0.65rem;color:var(--muted);margin-left:4px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${patient.notes.substring(0,40)}${patient.notes.length>40?'…':''}</span>` : ''}
+          <span class="nt-arrow">▼</span>
+        </button>
+        <div class="notes-panel" id="np-${patient.id}">
+          <textarea class="notes-ta" id="nta-${patient.id}" placeholder="Scrivi un promemoria...">${patient.notes||''}</textarea>
+          <div style="display:flex;justify-content:flex-end;margin-top:6px;">
+            <button class="btn btn-gold btn-sm notes-save" onclick="saveNotes('${patient.id}')">💾 Salva nota</button>
+          </div>
+        </div>
       </div>`;
   });
 
@@ -451,17 +573,79 @@ function syncAndAdjust(pid, did, deltaCp) {
 
 function addBox(pid, did) {
   const d = getP(pid).drugs.find(x=>x.id===did);
+  // Log the load event
+  if (!d.loadHistory) d.loadHistory = [];
+  d.loadHistory.unshift({ date: today(), boxes: 1 });
   syncAndAdjust(pid, did, d.cpBox);
+}
+
+// ── PRINT ─────────────────────────────────────────────────────────────────
+function printPatient(pid) {
+  const p = getP(pid);
+  // Temporarily hide all other cards
+  const allCards = document.querySelectorAll('.pcard');
+  const target   = document.getElementById('card-'+pid);
+  allCards.forEach(c => { if(c!==target) c.style.display='none'; });
+  document.getElementById('printDate').textContent =
+    'Stampato il ' + new Date().toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'});
+  window.print();
+  allCards.forEach(c => c.style.display='');
+}
+
+// ── LOAD HISTORY ──────────────────────────────────────────────────────────
+function openHistory(pid, did) {
+  const p = getP(pid);
+  const d = p.drugs.find(x=>x.id===did);
+  document.getElementById('histTitle').textContent = 'Storico caricamenti';
+  document.getElementById('histDrugName').textContent = `${p.name} · ${d.name}`;
+  renderHistoryLog(pid, did);
+  openOv('ovHistory');
+}
+
+function renderHistoryLog(pid, did) {
+  const d = getP(pid).drugs.find(x=>x.id===did);
+  const log = d.loadHistory || [];
+  const el  = document.getElementById('histLog');
+  if (!log.length) {
+    el.innerHTML = '<div class="load-empty">Nessun caricamento registrato.<br>Usa il pulsante <strong>＋ 1 conf.</strong> per tracciare le confezioni aggiunte.</div>';
+    return;
+  }
+  el.innerHTML = log.map((entry, i) => `
+    <div class="load-entry">
+      <span>📦 +${entry.boxes} confezione${entry.boxes>1?'i':''}</span>
+      <span class="le-date">${new Date(entry.date+'T12:00').toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'})}</span>
+      <button class="le-del" onclick="deleteHistoryEntry('${pid}','${did}',${i})" title="Elimina voce">✕</button>
+    </div>`).join('');
+}
+
+function deleteHistoryEntry(pid, did, idx) {
+  const d = getP(pid).drugs.find(x=>x.id===did);
+  d.loadHistory.splice(idx, 1);
+  save();
+  renderHistoryLog(pid, did);
 }
 function subCp(pid, did) {
   syncAndAdjust(pid, did, -1);
+}
+
+// ── NOTES ─────────────────────────────────────────────────────────────────
+function toggleNotes(pid) {
+  const btn   = document.getElementById('nt-'+pid);
+  const panel = document.getElementById('np-'+pid);
+  btn.classList.toggle('open');
+  panel.classList.toggle('open');
+}
+function saveNotes(pid) {
+  const p = getP(pid);
+  p.notes = document.getElementById('nta-'+pid).value;
+  save(); render();
 }
 
 // ── PATIENT CRUD ──────────────────────────────────────────────────────────
 function openAddPatient() {
   editPid=null;
   document.getElementById('ptTitle').textContent='Nuovo paziente';
-  ['ptName','ptCode','ptDob'].forEach(i=>document.getElementById(i).value='');
+  ['ptName','ptCode','ptDob','ptTessera','ptMedico','ptNotes'].forEach(i=>document.getElementById(i).value='');
   openOv('ovPatient');
 }
 function openEditPatient(id) {
@@ -470,15 +654,32 @@ function openEditPatient(id) {
   document.getElementById('ptName').value=p.name;
   document.getElementById('ptCode').value=p.code||'';
   document.getElementById('ptDob').value=p.dob||'';
+  document.getElementById('ptTessera').value=p.tessera||'';
+  document.getElementById('ptMedico').value=p.medico||'';
+  document.getElementById('ptNotes').value=p.notes||'';
   openOv('ovPatient');
 }
 function savePatient() {
   const name=document.getElementById('ptName').value.trim();
   if(!name){alert('Inserisci il nome.');return;}
   if(editPid){
-    const p=getP(editPid); p.name=name; p.code=document.getElementById('ptCode').value.trim(); p.dob=document.getElementById('ptDob').value;
+    const p=getP(editPid);
+    p.name=name;
+    p.code=document.getElementById('ptCode').value.trim();
+    p.dob=document.getElementById('ptDob').value;
+    p.tessera=document.getElementById('ptTessera').value;
+    p.medico=document.getElementById('ptMedico').value;
+    p.notes=document.getElementById('ptNotes').value;
   } else {
-    patients.push({id:uid(),name,code:document.getElementById('ptCode').value.trim(),dob:document.getElementById('ptDob').value,drugs:[]});
+    patients.push({
+      id:uid(), name,
+      code:document.getElementById('ptCode').value.trim(),
+      dob:document.getElementById('ptDob').value,
+      tessera:document.getElementById('ptTessera').value,
+      medico:document.getElementById('ptMedico').value,
+      notes:document.getElementById('ptNotes').value,
+      drugs:[]
+    });
   }
   save(); closeOv('ovPatient'); render();
 }
@@ -614,6 +815,125 @@ function importData(event) {
     event.target.value = '';
   };
   reader.readAsText(file);
+}
+
+// ── INVENTARIO PDF ────────────────────────────────────────────────────────
+function printInventory() {
+  if (!patients.length) { alert('Nessun paziente da stampare.'); return; }
+
+  const dateStr = new Date().toLocaleDateString('it-IT', {day:'2-digit', month:'long', year:'numeric'});
+  const timeStr = new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+
+  // Build table rows
+  let rows = '';
+  let totUrgent = 0, totWarn = 0;
+
+  const sorted = [...patients].sort((a,b) => a.name.localeCompare(b.name));
+
+  sorted.forEach(p => {
+    if (!p.drugs.length) {
+      rows += `<tr class="pt-row">
+        <td class="pt-name">${p.name}${p.code?` <span class="pt-code">${p.code}</span>`:''}</td>
+        <td colspan="3" style="color:#aaa;font-style:italic;font-size:0.78rem;">Nessun farmaco</td>
+      </tr>`;
+      return;
+    }
+    p.drugs.forEach((drug, idx) => {
+      const c   = computeDrug(drug);
+      const s   = c.status;
+      if (s==='urgent') totUrgent++;
+      else if (s==='warn') totWarn++;
+
+      const cpTxt   = s==='urgent' ? '0 cp' : `${Math.round(c.cp)} cp`;
+      const daysTxt = s==='urgent' ? '0 gg' : isFinite(c.daysLeft) ? `${c.daysLeft} gg` : '—';
+      const boxTxt  = s==='urgent' ? 'Esaurito' : c.boxes===0 ? `Ultima conf. [${c.partial}cp]` : `${c.boxes} conf.${c.hasOpen?` + [${c.partial}cp]`:''}`;
+
+      const statusDot = s==='urgent'
+        ? '<span style="color:#e05252;font-weight:700;">●</span>'
+        : s==='warn'
+        ? '<span style="color:#e8913a;font-weight:700;">●</span>'
+        : '<span style="color:#4db87a;">●</span>';
+
+      const rowClass = s==='urgent' ? 'row-urgent' : s==='warn' ? 'row-warn' : '';
+      const nameCell = idx===0
+        ? `<td class="pt-name" rowspan="${p.drugs.length}">${p.name}${p.code?` <span class="pt-code">${p.code}</span>`:''}</td>`
+        : '';
+
+      rows += `<tr class="${rowClass}">
+        ${nameCell}
+        <td class="pt-drug">${statusDot} ${drug.name}</td>
+        <td class="pt-stock">${cpTxt} · ${daysTxt}</td>
+        <td class="pt-boxes">${boxTxt}</td>
+      </tr>`;
+    });
+    // Separator after each patient
+    rows += `<tr class="pt-sep"><td colspan="4"></td></tr>`;
+  });
+
+  const summaryColor = totUrgent>0 ? '#e05252' : totWarn>0 ? '#e8913a' : '#4db87a';
+  const summaryTxt   = totUrgent>0
+    ? `⚠ ${totUrgent} farmaci esauriti · ${totWarn} all'ultima confezione`
+    : totWarn>0
+    ? `📦 ${totWarn} farmaci all'ultima confezione`
+    : '✓ Tutte le scorte nella norma';
+
+  const html = `<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8">
+<title>Inventario Terapie — ${dateStr}</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size:11px; color:#111; padding:24px 28px; }
+  .inv-header { display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #111; padding-bottom:8px; margin-bottom:14px; }
+  .inv-title { font-size:1.3rem; font-weight:700; letter-spacing:-0.3px; }
+  .inv-sub { font-size:0.75rem; color:#555; margin-top:3px; }
+  .inv-date { font-size:0.72rem; color:#555; text-align:right; line-height:1.6; }
+  .summary { display:inline-block; margin-bottom:14px; padding:5px 12px; border-radius:20px; font-size:0.75rem; font-weight:600; border:1.5px solid ${summaryColor}; color:${summaryColor}; }
+  table { width:100%; border-collapse:collapse; }
+  thead tr { background:#f0f0f0; }
+  th { padding:6px 8px; text-align:left; font-size:0.7rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#555; border-bottom:1.5px solid #ccc; }
+  td { padding:5px 8px; border-bottom:1px solid #eee; vertical-align:middle; }
+  .pt-name { font-weight:700; font-size:0.88rem; color:#111; white-space:nowrap; border-right:2px solid #e0e0e0; }
+  .pt-code { font-family:monospace; font-size:0.68rem; color:#888; margin-left:5px; }
+  .pt-drug  { font-size:0.82rem; color:#222; }
+  .pt-stock { font-family:monospace; font-size:0.78rem; color:#333; white-space:nowrap; }
+  .pt-boxes { font-family:monospace; font-size:0.75rem; color:#555; white-space:nowrap; }
+  .row-urgent td { background:#fff5f5; }
+  .row-warn   td { background:#fffaf5; }
+  .pt-sep td { padding:3px 0; border-bottom:2px solid #e8e8e8; }
+  .legend { margin-top:16px; display:flex; gap:16px; font-size:0.7rem; color:#555; }
+  .legend span { display:flex; align-items:center; gap:4px; }
+  @media print {
+    body { padding:12px 16px; }
+    @page { margin:1cm; }
+  }
+</style></head><body>
+<div class="inv-header">
+  <div>
+    <div class="inv-title">Inventario Terapie</div>
+    <div class="inv-sub">RicettaManager · ${sorted.length} pazient${sorted.length===1?'e':'i'} · ${sorted.reduce((a,p)=>a+p.drugs.length,0)} farmaci</div>
+  </div>
+  <div class="inv-date">Generato il ${dateStr}<br>alle ${timeStr}</div>
+</div>
+<div class="summary">${summaryTxt}</div>
+<table>
+  <thead><tr>
+    <th style="width:28%">Paziente</th>
+    <th style="width:30%">Farmaco</th>
+    <th style="width:20%">Scorta</th>
+    <th style="width:22%">Confezioni</th>
+  </tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="legend">
+  <span><span style="color:#4db87a;font-weight:700;">●</span> Scorta OK</span>
+  <span><span style="color:#e8913a;font-weight:700;">●</span> Ultima confezione</span>
+  <span><span style="color:#e05252;font-weight:700;">●</span> Esaurito</span>
+</div>
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=800,height=600');
+  win.document.write(html);
+  win.document.close();
+  win.onload = () => { win.focus(); win.print(); };
 }
 
 // ── AUTO REFRESH ogni ora ─────────────────────────────────────────────────
