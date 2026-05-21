@@ -132,6 +132,19 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 .add-drug-btn { display:flex; align-items:center; gap:6px; margin:0 12px 12px; padding:7px 12px; background:none; border:1px dashed var(--border-hi); border-radius:8px; color:var(--dim); font-family:'Nunito',sans-serif; font-size:0.8rem; font-weight:600; cursor:pointer; transition:all .15s; width:calc(100% - 24px); }
 .add-drug-btn:hover { border-color:var(--gold); color:var(--gold); background:var(--gold-bg); }
 
+/* GROUP FILTER BAR */
+.group-bar { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+.gbtn { display:inline-flex; align-items:center; gap:6px; padding:7px 16px; border-radius:20px; border:1.5px solid var(--border-hi); background:var(--surface2); color:var(--muted); font-family:'Nunito',sans-serif; font-size:0.82rem; font-weight:700; cursor:pointer; transition:all .15s; }
+.gBtn-all.active  { background:var(--gold);    border-color:var(--gold);    color:#0F1117; }
+.gBtn-cra.active  { background:#5B8DEF;        border-color:#5B8DEF;        color:#fff; }
+.gBtn-cd.active   { background:#9B59B6;        border-color:#9B59B6;        color:#fff; }
+.gBtn-all:hover   { border-color:var(--gold);  color:var(--gold); }
+.gBtn-cra:hover   { border-color:#5B8DEF;      color:#5B8DEF; }
+.gBtn-cd:hover    { border-color:#9B59B6;      color:#9B59B6; }
+.group-tag { font-family:'Inconsolata',monospace; font-size:0.62rem; font-weight:700; padding:2px 7px; border-radius:10px; letter-spacing:.05em; text-transform:uppercase; }
+.tag-cra  { background:rgba(91,141,239,.15); color:#5B8DEF; border:1px solid #5B8DEF; }
+.tag-cd   { background:rgba(155,89,182,.15); color:#9B59B6; border:1px solid #9B59B6; }
+
 /* EMPTY */
 .empty { text-align:center; padding:80px 20px; color:var(--muted); grid-column:1/-1; }
 .empty .ei { font-size:3rem; opacity:.4; margin-bottom:12px; }
@@ -250,12 +263,20 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
     </div>
     <div class="tbar-right">
       <button class="btn btn-ghost btn-sm" onclick="render()">⟳ Aggiorna</button>
-      <button class="btn btn-ghost btn-sm" onclick="printInventory()" title="Inventario completo PDF">📄 Inventario</button>
+      <button class="btn btn-ghost btn-sm" onclick="printInventory(activeGroup)" title="Inventario PDF gruppo attivo">📄 Inventario</button>
       <button class="btn btn-ghost btn-sm" onclick="exportData()" title="Esporta backup dati">💾 Esporta</button>
       <button class="btn btn-ghost btn-sm" onclick="document.getElementById('importFile').click()" title="Importa backup dati">📂 Importa</button>
       <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
     </div>
   </div>
+
+  <!-- GROUP FILTER -->
+  <div class="group-bar">
+    <button class="gbtn gBtn-all active" id="gbtn-all" onclick="setGroup('all')">👥 Tutti <span id="cnt-all"></span></button>
+    <button class="gbtn gBtn-cra" id="gbtn-cra" onclick="setGroup('CRA')">🏠 CRA <span id="cnt-cra"></span></button>
+    <button class="gbtn gBtn-cd"  id="gbtn-cd"  onclick="setGroup('CD')">☀️ Centro Diurno <span id="cnt-cd"></span></button>
+  </div>
+
   <div class="grid" id="grid"></div>
 </div>
 
@@ -268,6 +289,14 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
       <div class="fg"><label class="fl">Codice / ID</label><input class="fi" id="ptCode" placeholder="es. P001"></div>
       <div class="fg"><label class="fl">Data di nascita</label><input class="fi" type="date" id="ptDob"></div>
     </div>
+    <div class="fg">
+      <label class="fl">Gruppo</label>
+      <select class="fsel" id="ptGroup" onchange="toggleExpiryFields(this.value)">
+        <option value="CRA">🏠 CRA</option>
+        <option value="CD">☀️ Centro Diurno</option>
+      </select>
+    </div>
+    <div id="ptExpiryFields">
     <div class="frow">
       <div class="fg">
         <label class="fl">Scadenza Tessera Sanitaria</label>
@@ -277,6 +306,7 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
         <label class="fl">Scadenza Medico di Base</label>
         <input class="fi" type="date" id="ptMedico">
       </div>
+    </div>
     </div>
     <div class="fg">
       <label class="fl">Note iniziali (opzionale)</label>
@@ -356,11 +386,31 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 
 let patients = JSON.parse(localStorage.getItem('rm3_pts') || '[]');
 let editPid = null, editDid = null, curPid = null;
+let activeGroup = 'all'; // 'all' | 'CRA' | 'CD'
 
 function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 function save() { localStorage.setItem('rm3_pts', JSON.stringify(patients)); }
 function getP(id) { return patients.find(p=>p.id===id); }
 function today() { return new Date().toISOString().split('T')[0]; }
+
+// ── GROUP FILTER ──────────────────────────────────────────────────────────
+function setGroup(g) {
+  activeGroup = g;
+  ['all','cra','cd'].forEach(k => {
+    const btn = document.getElementById('gbtn-'+k);
+    btn.classList.remove('active');
+  });
+  document.getElementById('gbtn-'+(g==='all'?'all':g.toLowerCase())).classList.add('active');
+  render();
+}
+
+function updateGroupCounts() {
+  const cra = patients.filter(p=>(p.group||'CRA')==='CRA').length;
+  const cd  = patients.filter(p=>p.group==='CD').length;
+  document.getElementById('cnt-all').textContent = `(${patients.length})`;
+  document.getElementById('cnt-cra').textContent = `(${cra})`;
+  document.getElementById('cnt-cd').textContent  = `(${cd})`;
+}
 
 // ── CONSUMPTION ENGINE ────────────────────────────────────────────────────
 function daysBetween(isoA, isoB) {
@@ -441,36 +491,36 @@ function render(filterIds) {
   const grid = document.getElementById('grid');
   let list = filterIds ? patients.filter(p=>filterIds.includes(p.id)) : [...patients];
 
-  // sort: urgent→warn→ok
+  // Apply group filter
+  if (activeGroup !== 'all') list = list.filter(p=>(p.group||'CRA')===activeGroup);
+
   const score = p => { const ss = p.drugs.map(d=>computeDrug(d).status); return ss.includes('urgent')?0:ss.includes('warn')?1:2; };
   list.sort((a,b)=>score(a)-score(b));
+  updateGroupCounts();
 
   grid.innerHTML = '';
   if (!list.length) {
-    grid.innerHTML = `<div class="empty"><div class="ei">💊</div><h3>Nessun paziente</h3><p>Premi "+ Paziente" per iniziare.</p></div>`;
+    grid.innerHTML = `<div class="empty"><div class="ei">💊</div><h3>Nessun paziente</h3><p>${activeGroup==='all'?'Premi "+ Paziente" per iniziare.':'Nessun paziente in questo gruppo.'}</p></div>`;
     refreshAlerts(); return;
   }
 
   list.forEach(patient => {
-    const ws = score(patient)===0?'urgent':score(patient)===1?'warn':'ok';
+    const ws  = score(patient)===0?'urgent':score(patient)===1?'warn':'ok';
+    const grp = patient.group||'CRA';
+    const isCd = grp==='CD';
+    const grpTag = `<span class="group-tag tag-${grp.toLowerCase()}">${grp}</span>`;
 
     const rows = patient.drugs.map(drug => {
       const c = computeDrug(drug);
       const s = c.status;
       const pct = c.pct.toFixed(1);
-
-      // Box icons: full boxes + partial indicator
       let boxIcons = '';
-      for (let i=0;i<Math.min(c.boxes,8);i++) boxIcons += `<span class="box-icon" title="Confezione intera">📦</span>`;
+      for (let i=0;i<Math.min(c.boxes,8);i++) boxIcons += `<span class="box-icon">📦</span>`;
       if (c.boxes>8) boxIcons += `<span style="font-family:Inconsolata,monospace;font-size:0.7rem;color:var(--muted)"> +${c.boxes-8}</span>`;
-      if (c.hasOpen) boxIcons += `<span title="${c.partial} cp rimaste nella conf. aperta" style="font-family:Inconsolata,monospace;font-size:0.72rem;color:var(--amber);margin-left:2px">[${c.partial}cp]</span>`;
+      if (c.hasOpen) boxIcons += `<span style="font-family:Inconsolata,monospace;font-size:0.72rem;color:var(--amber);margin-left:2px">[${c.partial}cp]</span>`;
       if (!boxIcons) boxIcons = `<span style="font-family:Inconsolata,monospace;font-size:0.72rem;color:var(--red)">Nessuna scorta</span>`;
-
-      const badge = s==='urgent' ? `<span class="badge urgent">ESAURITO</span>`
-                  : s==='warn'   ? `<span class="badge warn">ULTIMA CONF.</span>` : '';
-
+      const badge = s==='urgent'?`<span class="badge urgent">ESAURITO</span>`:s==='warn'?`<span class="badge warn">ULTIMA CONF.</span>`:'';
       const daysStr = s==='urgent'?'0 giorni':isFinite(c.daysLeft)?`${c.daysLeft} gg`:'—';
-
       return `
         <div class="drow ${s}" id="dr-${drug.id}">
           <div class="drow-top">
@@ -487,47 +537,29 @@ function render(filterIds) {
               <button class="bico del" title="Elimina" onclick="deleteDrug('${patient.id}','${drug.id}')">✕</button>
             </div>
           </div>
-
-          <!-- Box icons -->
-          <div class="stock-line">
-            <div class="stock-boxes">${boxIcons}</div>
-          </div>
-
-          <!-- Progress bar -->
-          <div class="pbar-wrap">
-            <div class="pbar-track"><div class="pbar-fill ${s}" style="width:${pct}%"></div></div>
-          </div>
-
-          <!-- Stock text -->
-          <div class="stock-text">
-            <span><strong>${Math.round(c.cp)} cp</strong> rimaste · ${daysStr} di terapia</span>
-            ${badge}
-          </div>
-
-          <!-- Manual controls -->
+          <div class="stock-line"><div class="stock-boxes">${boxIcons}</div></div>
+          <div class="pbar-wrap"><div class="pbar-track"><div class="pbar-fill ${s}" style="width:${pct}%"></div></div></div>
+          <div class="stock-text"><span><strong>${Math.round(c.cp)} cp</strong> rimaste · ${daysStr} di terapia</span>${badge}</div>
           <div class="drow-controls">
-            <button class="ctrl-btn add-box" onclick="addBox('${patient.id}','${drug.id}')" title="Aggiungi una confezione">＋ 1 conf.</button>
-            <button class="ctrl-btn sub-cp"  onclick="subCp('${patient.id}','${drug.id}')"  title="Scala 1 compressa manualmente">－ 1 cp</button>
-            <span class="ctrl-label">Ultimo sync: ${drug.lastSync}</span>
+            <button class="ctrl-btn add-box" onclick="addBox('${patient.id}','${drug.id}')">＋ 1 conf.</button>
+            <button class="ctrl-btn sub-cp"  onclick="subCp('${patient.id}','${drug.id}')">－ 1 cp</button>
+            <span class="ctrl-label">Sync: ${drug.lastSync}</span>
           </div>
         </div>`;
     }).join('') || '<p style="color:var(--dim);font-size:0.8rem;padding:4px 2px">Nessun farmaco</p>';
 
-    const code = patient.code ? `<div class="pmeta">${patient.code}${patient.dob?' · '+new Date(patient.dob+'T12:00').toLocaleDateString('it-IT'):''}</div>` : '';
+    const code = `<div class="pmeta">${grpTag}${patient.code?' '+patient.code:''}${patient.dob?' · '+new Date(patient.dob+'T12:00').toLocaleDateString('it-IT'):''}</div>`;
 
-    // Expiry chips
     function expiryChip(label, dateStr) {
       if (!dateStr) return `<span class="expiry-chip exp-none">🪪 ${label}: —</span>`;
       const days = daysBetween(today(), dateStr);
       const cls  = days < 0 ? 'exp-urgent' : days <= 30 ? 'exp-warn' : 'exp-ok';
       const icon = days < 0 ? '❌' : days <= 30 ? '⚠️' : '✓';
-      const txt  = days < 0 ? `scadut${days===-1?'a':'a'} ${Math.abs(days)}gg fa` : days === 0 ? 'scade oggi' : `${days}gg`;
+      const txt  = days < 0 ? `scaduta ${Math.abs(days)}gg fa` : days === 0 ? 'scade oggi' : `${days}gg`;
       return `<span class="expiry-chip ${cls}">${icon} ${label}: ${txt}</span>`;
     }
-    const tesseraChip = expiryChip('Tessera', patient.tessera);
-    const medicoChip  = expiryChip('Medico', patient.medico);
+    const expiryRow = !isCd ? `<div class="expiry-row">${expiryChip('Tessera',patient.tessera)}${expiryChip('Medico',patient.medico)}</div>` : '';
 
-    // Notes panel
     const hasNotes = patient.notes && patient.notes.trim();
     const notesLabel = hasNotes ? '📝 Note' : '📝 Aggiungi nota';
 
@@ -541,12 +573,12 @@ function render(filterIds) {
             <button class="btn btn-red btn-sm" onclick="delPatient('${patient.id}')">✕</button>
           </div>
         </div>
-        <div class="expiry-row">${tesseraChip}${medicoChip}</div>
+        ${expiryRow}
         <div class="drug-list">${rows}</div>
         <button class="add-drug-btn" onclick="openAddDrug('${patient.id}')">＋ Aggiungi farmaco</button>
         <button class="notes-toggle" id="nt-${patient.id}" onclick="toggleNotes('${patient.id}')">
           ${notesLabel}
-          ${hasNotes ? `<span style="font-family:Inconsolata,monospace;font-size:0.65rem;color:var(--muted);margin-left:4px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${patient.notes.substring(0,40)}${patient.notes.length>40?'…':''}</span>` : ''}
+          ${hasNotes?`<span style="font-family:Inconsolata,monospace;font-size:0.65rem;color:var(--muted);margin-left:4px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${patient.notes.substring(0,40)}${patient.notes.length>40?'…':''}</span>`:''}
           <span class="nt-arrow">▼</span>
         </button>
         <div class="notes-panel" id="np-${patient.id}">
@@ -646,6 +678,8 @@ function openAddPatient() {
   editPid=null;
   document.getElementById('ptTitle').textContent='Nuovo paziente';
   ['ptName','ptCode','ptDob','ptTessera','ptMedico','ptNotes'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('ptGroup').value='CRA';
+  toggleExpiryFields('CRA');
   openOv('ovPatient');
 }
 function openEditPatient(id) {
@@ -657,26 +691,34 @@ function openEditPatient(id) {
   document.getElementById('ptTessera').value=p.tessera||'';
   document.getElementById('ptMedico').value=p.medico||'';
   document.getElementById('ptNotes').value=p.notes||'';
+  const grp = p.group||'CRA';
+  document.getElementById('ptGroup').value=grp;
+  toggleExpiryFields(grp);
   openOv('ovPatient');
+}
+function toggleExpiryFields(grp) {
+  document.getElementById('ptExpiryFields').style.display = grp==='CD' ? 'none' : 'block';
 }
 function savePatient() {
   const name=document.getElementById('ptName').value.trim();
   if(!name){alert('Inserisci il nome.');return;}
+  const grp=document.getElementById('ptGroup').value;
   if(editPid){
     const p=getP(editPid);
-    p.name=name;
-    p.code=document.getElementById('ptCode').value.trim();
+    p.name=name; p.code=document.getElementById('ptCode').value.trim();
     p.dob=document.getElementById('ptDob').value;
-    p.tessera=document.getElementById('ptTessera').value;
-    p.medico=document.getElementById('ptMedico').value;
+    p.group=grp;
+    p.tessera=grp==='CD'?'':document.getElementById('ptTessera').value;
+    p.medico=grp==='CD'?'':document.getElementById('ptMedico').value;
     p.notes=document.getElementById('ptNotes').value;
   } else {
     patients.push({
       id:uid(), name,
       code:document.getElementById('ptCode').value.trim(),
       dob:document.getElementById('ptDob').value,
-      tessera:document.getElementById('ptTessera').value,
-      medico:document.getElementById('ptMedico').value,
+      group:grp,
+      tessera:grp==='CD'?'':document.getElementById('ptTessera').value,
+      medico:grp==='CD'?'':document.getElementById('ptMedico').value,
       notes:document.getElementById('ptNotes').value,
       drugs:[]
     });
@@ -818,17 +860,17 @@ function importData(event) {
 }
 
 // ── INVENTARIO PDF ────────────────────────────────────────────────────────
-function printInventory() {
-  if (!patients.length) { alert('Nessun paziente da stampare.'); return; }
+function printInventory(group) {
+  const filtered = group && group!=='all' ? patients.filter(p=>(p.group||'CRA')===group) : patients;
+  if (!filtered.length) { alert('Nessun paziente da stampare.'); return; }
 
   const dateStr = new Date().toLocaleDateString('it-IT', {day:'2-digit', month:'long', year:'numeric'});
   const timeStr = new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+  const groupLabel = group==='CRA'?'CRA':group==='CD'?'Centro Diurno':'Tutti i gruppi';
 
-  // Build table rows
   let rows = '';
   let totUrgent = 0, totWarn = 0;
-
-  const sorted = [...patients].sort((a,b) => a.name.localeCompare(b.name));
+  const sorted = [...filtered].sort((a,b) => a.name.localeCompare(b.name));
 
   sorted.forEach(p => {
     if (!p.drugs.length) {
@@ -908,7 +950,7 @@ function printInventory() {
 </style></head><body>
 <div class="inv-header">
   <div>
-    <div class="inv-title">Inventario Terapie</div>
+    <div class="inv-title">Inventario Terapie · ${groupLabel}</div>
     <div class="inv-sub">RicettaManager · ${sorted.length} pazient${sorted.length===1?'e':'i'} · ${sorted.reduce((a,p)=>a+p.drugs.length,0)} farmaci</div>
   </div>
   <div class="inv-date">Generato il ${dateStr}<br>alle ${timeStr}</div>
