@@ -440,8 +440,8 @@ function computeDrug(drug) {
   const maxCp     = drug.cpBox * Math.ceil(drug.cpRemaining / drug.cpBox || 1);
   const pct       = drug.cpRemaining > 0 ? Math.min(100, (cp / drug.cpRemaining) * 100) : 0;
 
-  // Status: urgent=esaurito, warn=ultima confezione, low=≤10gg, ok=tutto bene
-  const status = cp === 0 ? 'urgent'
+  // Status: urgent=esaurito, warn=ultima confezione, low=≤10gg (ma più di 1 conf.), ok=tutto bene
+  const status = cp === 0       ? 'urgent'
                : totalConf <= 1 ? 'warn'
                : daysLeft <= 10 ? 'low'
                : 'ok';
