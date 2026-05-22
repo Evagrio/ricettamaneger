@@ -845,15 +845,36 @@ function importData(event) {
       const payload = JSON.parse(e.target.result);
       if (!payload.patients || !Array.isArray(payload.patients)) throw new Error('Formato non valido');
       const n = payload.patients.length;
-      if (!confirm(`Trovati ${n} pazient${n===1?'e':'i'} nel backup.\n\nATTENZIONE: i dati attuali verranno sostituiti.\nContinuare?`)) return;
-      patients = payload.patients;
-      save();
-      render();
-      alert(`✓ Importazione completata: ${n} pazient${n===1?'e':'i'} caricati.`);
+
+      if (patients.length === 0) {
+        // No existing data — just import
+        patients = payload.patients;
+        save(); render();
+        alert(`✓ Importazione completata: ${n} pazienti caricati.`);
+      } else {
+        // Ask: merge or replace?
+        const choice = confirm(
+          `Hai già ${patients.length} pazienti nell'app.\n\n` +
+          `OK → AGGIUNGI i ${n} nuovi pazienti a quelli esistenti\n` +
+          `Annulla → SOSTITUISCI tutto con i ${n} pazienti del file`
+        );
+        if (choice) {
+          // MERGE: add only patients whose id doesn't already exist
+          const existingIds = new Set(patients.map(p => p.id));
+          const toAdd = payload.patients.filter(p => !existingIds.has(p.id));
+          patients = [...patients, ...toAdd];
+          save(); render();
+          alert(`✓ Aggiunti ${toAdd.length} nuovi pazienti. Totale: ${patients.length}.`);
+        } else {
+          if (!confirm(`Confermi di voler SOSTITUIRE tutti i dati esistenti con i ${n} pazienti del file? Questa azione non è reversibile.`)) return;
+          patients = payload.patients;
+          save(); render();
+          alert(`✓ Sostituzione completata: ${n} pazienti caricati.`);
+        }
+      }
     } catch(err) {
       alert('Errore: file non valido o danneggiato.\n' + err.message);
     }
-    // reset input so same file can be imported again if needed
     event.target.value = '';
   };
   reader.readAsText(file);
