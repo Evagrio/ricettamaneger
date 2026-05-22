@@ -15,7 +15,8 @@
   --red: #E05252; --red-bg: #2A1515;
   --amber: #E8913A; --amber-bg: #2A1E0E;
   --green: #4DB87A; --green-bg: #0E2018;
-  --r: 12px;
+  --orange: #D35400;
+  --orange-bg: #2A1500;
 }
 body { font-family:'Nunito',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; display:flex; flex-direction:column; }
 
@@ -67,6 +68,7 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 .pcard:hover { border-color:var(--border-hi); box-shadow:0 8px 32px rgba(0,0,0,.4); }
 .pcard.s-urgent { border-color:var(--red); }
 .pcard.s-warn   { border-color:var(--amber); }
+.pcard.s-low    { border-color:var(--orange); }
 
 .pcard-head { padding:14px 16px 12px; display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--border); }
 .pname { font-family:'Playfair Display',serif; font-size:1.05rem; }
@@ -78,8 +80,9 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 
 /* DRUG ROW */
 .drow { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:11px 12px; transition:border-color .2s; }
-.drow.urgent { border-color:var(--red);   background:var(--red-bg); }
-.drow.warn   { border-color:var(--amber); background:var(--amber-bg); }
+.drow.urgent { border-color:var(--red);    background:var(--red-bg); }
+.drow.warn   { border-color:var(--amber);  background:var(--amber-bg); }
+.drow.low    { border-color:var(--orange); background:var(--orange-bg); }
 
 /* top line */
 .drow-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:9px; gap:8px; }
@@ -87,6 +90,7 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 .sdot { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:4px; }
 .sdot.ok     { background:var(--green); }
 .sdot.warn   { background:var(--amber); }
+.sdot.low    { background:var(--orange); }
 .sdot.urgent { background:var(--red); animation:pulse 1.2s infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
 .dname { font-size:0.88rem; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -109,14 +113,16 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 .pbar-fill { height:100%; border-radius:2px; transition:width .4s; }
 .pbar-fill.ok     { background:var(--green); }
 .pbar-fill.warn   { background:var(--amber); }
+.pbar-fill.low    { background:var(--orange); }
 .pbar-fill.urgent { background:var(--red); }
 
 /* stock text row */
 .stock-text { font-family:'Inconsolata',monospace; font-size:0.7rem; color:var(--muted); display:flex; justify-content:space-between; align-items:center; margin-top:3px; }
 .stock-text strong { color:var(--text); }
 .badge { font-size:0.63rem; font-weight:700; padding:2px 7px; border-radius:10px; letter-spacing:.04em; text-transform:uppercase; }
-.badge.urgent { background:var(--red);   color:#fff; }
-.badge.warn   { background:var(--amber); color:#fff; }
+.badge.urgent { background:var(--red);    color:#fff; }
+.badge.warn   { background:var(--amber);  color:#fff; }
+.badge.low    { background:var(--orange); color:#fff; }
 
 /* manual controls */
 .drow-controls { display:flex; align-items:center; gap:6px; margin-top:8px; border-top:1px solid var(--border); padding-top:8px; }
@@ -434,8 +440,11 @@ function computeDrug(drug) {
   const maxCp     = drug.cpBox * Math.ceil(drug.cpRemaining / drug.cpBox || 1);
   const pct       = drug.cpRemaining > 0 ? Math.min(100, (cp / drug.cpRemaining) * 100) : 0;
 
-  // Status: warn = ultima confezione (totalConf === 1), urgent = esaurito
-  const status = cp === 0 ? 'urgent' : totalConf <= 1 ? 'warn' : 'ok';
+  // Status: urgent=esaurito, warn=ultima confezione, low=≤10gg, ok=tutto bene
+  const status = cp === 0 ? 'urgent'
+               : totalConf <= 1 ? 'warn'
+               : daysLeft <= 10 ? 'low'
+               : 'ok';
 
   return { cp, boxes, partial: Math.round(partial), hasOpen, totalConf, daysLeft, pct, status };
 }
@@ -448,27 +457,26 @@ function updateHeader() {
 
 // ── ALERTS ────────────────────────────────────────────────────────────────
 function refreshAlerts() {
-  const urgent=[], warn=[];
+  const urgent=[], warn=[], low=[];
   patients.forEach(p => {
-    // Drug alerts
     p.drugs.forEach(d => {
       const s = computeDrug(d).status;
       const lbl = `${p.name} · ${d.name}`;
       if (s==='urgent') urgent.push(lbl);
       else if (s==='warn') warn.push(lbl);
+      else if (s==='low')  low.push(lbl);
     });
-    // Expiry alerts: tessera + medico
     [{label:'Tessera', date:p.tessera},{label:'Medico', date:p.medico}].forEach(({label, date}) => {
       if (!date) return;
       const days = daysBetween(today(), date);
       const lbl  = `${p.name} · ${label}`;
-      if (days < 0)      urgent.push(lbl + ' (scaduto)');
+      if (days < 0)        urgent.push(lbl + ' (scaduto)');
       else if (days <= 30) warn.push(lbl + ` (${days}gg)`);
     });
   });
   const banner = document.getElementById('alertBanner');
   const inner  = document.getElementById('alertInner');
-  const total  = urgent.length + warn.length;
+  const total  = urgent.length + warn.length + low.length;
   if (!total) {
     banner.classList.remove('show');
     document.getElementById('hAlert').textContent = '✓ Tutto OK';
@@ -476,13 +484,18 @@ function refreshAlerts() {
   }
   banner.classList.add('show');
   const isUrgent = urgent.length > 0;
+  const isWarn   = warn.length > 0;
   inner.className = 'alert-inner ' + (isUrgent ? 'urgent' : 'warn');
   document.getElementById('alertTtl').textContent = isUrgent
     ? `⚠ ${urgent.length} alert urgent${urgent.length>1?'i':'o'}`
-    : `📋 ${warn.length} scadenz${warn.length>1?'e':'a'} in avvicinamento`;
-  document.getElementById('alertChips').innerHTML =
-    [...urgent.map(l=>`<span class="chip urgent">${l}</span>`),
-     ...warn.map(l=>`<span class="chip warn">${l}</span>`)].join('');
+    : isWarn
+    ? `📦 ${warn.length} farmac${warn.length>1?'i':'o'} all'ultima confezione`
+    : `⏱ ${low.length} farmac${low.length>1?'i':'o'} in esaurimento (≤10gg)`;
+  document.getElementById('alertChips').innerHTML = [
+    ...urgent.map(l=>`<span class="chip urgent">${l}</span>`),
+    ...warn.map(l=>`<span class="chip warn">${l}</span>`),
+    ...low.map(l=>`<span class="chip" style="background:rgba(211,84,0,.15);border:1px solid rgba(211,84,0,.4);color:var(--text)">${l}</span>`)
+  ].join('');
   document.getElementById('hAlert').textContent = `${total} alert attiv${total>1?'i':'o'}`;
 }
 
@@ -494,7 +507,7 @@ function render(filterIds) {
   // Apply group filter
   if (activeGroup !== 'all') list = list.filter(p=>(p.group||'CRA')===activeGroup);
 
-  const score = p => { const ss = p.drugs.map(d=>computeDrug(d).status); return ss.includes('urgent')?0:ss.includes('warn')?1:2; };
+  const score = p => { const ss = p.drugs.map(d=>computeDrug(d).status); return ss.includes('urgent')?0:ss.includes('warn')?1:ss.includes('low')?2:3; };
   list.sort((a,b)=>score(a)-score(b));
   updateGroupCounts();
 
@@ -505,7 +518,7 @@ function render(filterIds) {
   }
 
   list.forEach(patient => {
-    const ws  = score(patient)===0?'urgent':score(patient)===1?'warn':'ok';
+    const ws  = score(patient)===0?'urgent':score(patient)===1?'warn':score(patient)===2?'low':'ok';
     const grp = patient.group||'CRA';
     const isCd = grp==='CD';
     const grpTag = `<span class="group-tag tag-${grp.toLowerCase()}">${grp}</span>`;
@@ -519,7 +532,7 @@ function render(filterIds) {
       if (c.boxes>8) boxIcons += `<span style="font-family:Inconsolata,monospace;font-size:0.7rem;color:var(--muted)"> +${c.boxes-8}</span>`;
       if (c.hasOpen) boxIcons += `<span style="font-family:Inconsolata,monospace;font-size:0.72rem;color:var(--amber);margin-left:2px">[${c.partial}cp]</span>`;
       if (!boxIcons) boxIcons = `<span style="font-family:Inconsolata,monospace;font-size:0.72rem;color:var(--red)">Nessuna scorta</span>`;
-      const badge = s==='urgent'?`<span class="badge urgent">ESAURITO</span>`:s==='warn'?`<span class="badge warn">ULTIMA CONF.</span>`:'';
+      const badge = s==='urgent'?`<span class="badge urgent">ESAURITO</span>`:s==='warn'?`<span class="badge warn">ULTIMA CONF.</span>`:s==='low'?`<span class="badge low">≤10 GIORNI</span>`:'';
       const daysStr = s==='urgent'?'0 giorni':isFinite(c.daysLeft)?`${c.daysLeft} gg`:'—';
       return `
         <div class="drow ${s}" id="dr-${drug.id}">
