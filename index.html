@@ -241,15 +241,79 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 
 @keyframes fadeIn { from{opacity:0} to{opacity:1} }
 ::-webkit-scrollbar { width:5px; } ::-webkit-scrollbar-track { background:var(--bg); } ::-webkit-scrollbar-thumb { background:var(--border-hi); border-radius:3px; }
+
+/* LOGIN SCREEN */
+.login-screen { position:fixed; inset:0; background:var(--bg); z-index:999; display:flex; align-items:center; justify-content:center; padding:24px; }
+.login-box { background:var(--surface); border:1px solid var(--border-hi); border-radius:20px; padding:40px 36px; width:100%; max-width:380px; text-align:center; box-shadow:0 24px 64px rgba(0,0,0,.6); animation:mIn .3s ease; }
+.login-logo { font-family:'Playfair Display',serif; font-size:2rem; color:var(--gold); margin-bottom:4px; }
+.login-logo em { font-style:italic; color:var(--text); }
+.login-sub { font-size:0.78rem; color:var(--muted); margin-bottom:32px; }
+.login-icon { font-size:2.5rem; margin-bottom:16px; }
+.login-box h3 { font-family:'Playfair Display',serif; font-size:1.1rem; color:var(--text); margin-bottom:20px; }
+.login-input-wrap { position:relative; margin-bottom:12px; }
+.login-input { width:100%; padding:12px 44px 12px 14px; background:var(--surface2); border:1.5px solid var(--border-hi); border-radius:10px; color:var(--text); font-family:'Nunito',sans-serif; font-size:1rem; outline:none; transition:border-color .15s; text-align:center; letter-spacing:.15em; }
+.login-input:focus { border-color:var(--gold); }
+.login-toggle { position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--muted); font-size:1rem; padding:4px; }
+.login-toggle:hover { color:var(--text); }
+.login-btn { width:100%; padding:12px; background:var(--gold); color:#0F1117; border:none; border-radius:10px; font-family:'Nunito',sans-serif; font-size:1rem; font-weight:800; cursor:pointer; transition:all .15s; margin-top:4px; }
+.login-btn:hover { filter:brightness(1.1); }
+.login-error { color:var(--red); font-size:0.8rem; margin-top:8px; min-height:18px; }
+.login-remember { display:flex; align-items:center; justify-content:center; gap:7px; margin-top:14px; font-size:0.8rem; color:var(--muted); cursor:pointer; }
+.login-remember input { cursor:pointer; accent-color:var(--gold); width:15px; height:15px; }
+.login-footer { margin-top:28px; font-size:0.68rem; color:var(--dim); line-height:1.6; }
+
+/* LOCK BTN in header */
+.lock-btn { background:none; border:1px solid var(--border-hi); border-radius:8px; padding:5px 10px; color:var(--muted); cursor:pointer; font-size:0.8rem; transition:all .15s; }
+.lock-btn:hover { color:var(--red); border-color:var(--red); }
 </style>
 </head>
 <body>
+
+<!-- LOGIN SCREEN -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">Ricetta<em>Manager</em></div>
+    <div class="login-sub">Gestione terapie farmacologiche</div>
+    <div class="login-icon">🔒</div>
+    <h3>Accesso protetto</h3>
+    <div class="login-input-wrap">
+      <input class="login-input" type="password" id="loginPwd" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()">
+      <button class="login-toggle" onclick="togglePwdVisibility()" id="loginToggle">👁</button>
+    </div>
+    <button class="login-btn" onclick="doLogin()">Entra</button>
+    <div class="login-error" id="loginError"></div>
+    <label class="login-remember">
+      <input type="checkbox" id="loginRemember"> Ricordami su questo dispositivo
+    </label>
+    <div class="login-footer">
+      Prima volta? La password predefinita è <strong style="color:var(--gold);letter-spacing:.1em">ricetta2025</strong><br>
+      Cambiala dopo il primo accesso dalle impostazioni.
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE PASSWORD MODAL -->
+<div class="overlay" id="ovChangePwd">
+  <div class="modal" style="max-width:400px">
+    <h3>Cambia password</h3>
+    <div class="fg"><label class="fl">Password attuale</label><input class="fi" type="password" id="cpOld" placeholder="Password attuale"></div>
+    <div class="fg"><label class="fl">Nuova password</label><input class="fi" type="password" id="cpNew" placeholder="Minimo 6 caratteri"></div>
+    <div class="fg"><label class="fl">Conferma nuova password</label><input class="fi" type="password" id="cpConfirm" placeholder="Ripeti la nuova password"></div>
+    <div class="login-error" id="cpError"></div>
+    <div class="mfooter">
+      <button class="btn btn-ghost" onclick="closeOv('ovChangePwd')">Annulla</button>
+      <button class="btn btn-gold" onclick="changePassword()">Salva</button>
+    </div>
+  </div>
+</div>
 
 <header>
   <div class="logo">Ricetta<em>Manager</em></div>
   <div class="hdr-right">
     <div class="clock"><div id="hDate"></div><div id="hAlert" style="color:var(--gold);font-weight:700"></div></div>
     <button class="btn btn-ghost btn-sm" onclick="openSearch()">🔍 Cerca</button>
+    <button class="lock-btn" onclick="openOv('ovChangePwd')" title="Cambia password">🔑</button>
+    <button class="lock-btn" onclick="lockApp()" title="Blocca app">🔒</button>
     <button class="btn btn-gold" onclick="openAddPatient()">＋ Paziente</button>
   </div>
 </header>
@@ -1012,11 +1076,80 @@ function printInventory(group) {
   win.onload = () => { win.focus(); win.print(); };
 }
 
+// ── AUTH ──────────────────────────────────────────────────────────────────
+const PWD_KEY      = 'rm3_pwd';
+const SESSION_KEY  = 'rm3_session';
+const DEFAULT_PWD  = 'ricetta2025';
+
+function getStoredPwd() { return localStorage.getItem(PWD_KEY) || DEFAULT_PWD; }
+
+function checkSession() {
+  // If "remember me" token exists and is valid → skip login
+  const token = localStorage.getItem(SESSION_KEY);
+  if (token === 'persistent') return true;
+  // Session token (tab-level) via sessionStorage
+  if (sessionStorage.getItem(SESSION_KEY) === 'active') return true;
+  return false;
+}
+
+function doLogin() {
+  const pwd   = document.getElementById('loginPwd').value;
+  const err   = document.getElementById('loginError');
+  const remember = document.getElementById('loginRemember').checked;
+  if (pwd === getStoredPwd()) {
+    if (remember) localStorage.setItem(SESSION_KEY, 'persistent');
+    else sessionStorage.setItem(SESSION_KEY, 'active');
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('loginPwd').value = '';
+    err.textContent = '';
+  } else {
+    err.textContent = 'Password errata. Riprova.';
+    document.getElementById('loginPwd').value = '';
+    document.getElementById('loginPwd').focus();
+  }
+}
+
+function lockApp() {
+  if (!confirm('Vuoi bloccare l\'app?')) return;
+  sessionStorage.removeItem(SESSION_KEY);
+  // Don't remove persistent — only manual logout clears it
+  document.getElementById('loginPwd').value = '';
+  document.getElementById('loginError').textContent = '';
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+
+function togglePwdVisibility() {
+  const input  = document.getElementById('loginPwd');
+  const toggle = document.getElementById('loginToggle');
+  if (input.type === 'password') { input.type = 'text';     toggle.textContent = '🙈'; }
+  else                           { input.type = 'password'; toggle.textContent = '👁'; }
+}
+
+function changePassword() {
+  const oldPwd  = document.getElementById('cpOld').value;
+  const newPwd  = document.getElementById('cpNew').value;
+  const confirm = document.getElementById('cpConfirm').value;
+  const err     = document.getElementById('cpError');
+  if (oldPwd !== getStoredPwd())  { err.textContent = 'Password attuale errata.'; return; }
+  if (newPwd.length < 6)          { err.textContent = 'La nuova password deve avere almeno 6 caratteri.'; return; }
+  if (newPwd !== confirm)         { err.textContent = 'Le password non coincidono.'; return; }
+  localStorage.setItem(PWD_KEY, newPwd);
+  // If persistent session active, keep it
+  err.textContent = '';
+  ['cpOld','cpNew','cpConfirm'].forEach(i => document.getElementById(i).value = '');
+  closeOv('ovChangePwd');
+  alert('✓ Password cambiata con successo.');
+}
+
 // ── AUTO REFRESH ogni ora ─────────────────────────────────────────────────
 setInterval(()=>{render();updateHeader();},3600000);
 
 // ── INIT ──────────────────────────────────────────────────────────────────
-updateHeader(); render();
+updateHeader();
+if (checkSession()) {
+  document.getElementById('loginScreen').style.display = 'none';
+}
+render();
 </script>
 </body>
 </html>
