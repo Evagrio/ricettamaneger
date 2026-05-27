@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RicettaManager</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Inconsolata:wght@400;500;600&family=Nunito:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0F1117; --surface: #181C27; --surface2: #1E2333;
+  --border: #2A3045; --border-hi: #3A4560;
+  --text: #E8EAF0; --muted: #7A8099; --dim: #4A5270;
+  --gold: #E8B84B; --gold-bg: rgba(232,184,75,0.08);
+  --red: #E05252; --red-bg: #2A1515;
+  --amber: #E8913A; --amber-bg: #2A1E0E;
+  --green: #4DB87A; --green-bg: #0E2018;
+  --orange: #D35400;
+  --orange-bg: #2A1500;
+}
+body { font-family:'Nunito',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; display:flex; flex-direction:column; }
+
+/* HEADER */
+header { background:var(--surface); border-bottom:1px solid var(--border); padding:14px 24px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; gap:12px; }
+.logo { font-family:'Playfair Display',serif; font-size:1.4rem; color:var(--gold); white-space:nowrap; }
+.logo em { font-style:italic; color:var(--text); }
+.hdr-right { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.clock { font-family:'Inconsolata',monospace; font-size:0.72rem; color:var(--muted); text-align:right; line-height:1.7; }
+
+/* ALERT BANNER */
+.alert-banner { margin:18px 24px 0; display:none; animation:fadeIn .3s; }
+.alert-banner.show { display:block; }
+.alert-inner { border-radius:var(--r); padding:13px 17px; }
+.alert-inner.urgent { background:var(--red-bg); border:1px solid var(--red); }
+.alert-inner.warn   { background:var(--amber-bg); border:1px solid var(--amber); }
+.alert-ttl { font-family:'Inconsolata',monospace; font-size:0.68rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; margin-bottom:7px; }
+.alert-inner.urgent .alert-ttl { color:var(--red); }
+.alert-inner.warn   .alert-ttl { color:var(--amber); }
+.alert-chips { display:flex; flex-wrap:wrap; gap:5px; }
+.chip { font-size:0.78rem; padding:3px 10px; border-radius:20px; }
+.chip.urgent { background:rgba(224,82,82,.15); border:1px solid rgba(224,82,82,.3); color:var(--text); }
+.chip.warn   { background:rgba(232,145,58,.15); border:1px solid rgba(232,145,58,.3); color:var(--text); }
+
+/* CONTAINER */
+.container { max-width:1120px; margin:0 auto; padding:22px 24px; flex:1; }
+
+/* TOOLBAR */
+.toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:10px; }
+.toolbar h2 { font-family:'Playfair Display',serif; font-size:1.15rem; }
+.toolbar p  { font-size:0.75rem; color:var(--muted); margin-top:2px; }
+.tbar-right { display:flex; gap:8px; }
+
+/* BUTTONS */
+.btn { display:inline-flex; align-items:center; gap:5px; padding:8px 15px; border-radius:8px; border:none; cursor:pointer; font-family:'Nunito',sans-serif; font-size:0.83rem; font-weight:700; transition:all .15s; white-space:nowrap; }
+.btn-gold    { background:var(--gold); color:#0F1117; }
+.btn-gold:hover { filter:brightness(1.1); }
+.btn-ghost   { background:var(--surface2); color:var(--text); border:1px solid var(--border-hi); }
+.btn-ghost:hover { background:var(--border); }
+.btn-red     { background:var(--red-bg); color:var(--red); border:1px solid var(--red); }
+.btn-red:hover { background:var(--red); color:#fff; }
+.btn-sm { padding:5px 10px; font-size:0.75rem; }
+
+/* GRID */
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:18px; }
+
+/* PATIENT CARD */
+.pcard { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); overflow:hidden; transition:box-shadow .2s, border-color .2s; }
+.pcard:hover { border-color:var(--border-hi); box-shadow:0 8px 32px rgba(0,0,0,.4); }
+.pcard.s-urgent { border-color:var(--red); }
+.pcard.s-warn   { border-color:var(--amber); }
+.pcard.s-low    { border-color:var(--orange); }
+
+.pcard-head { padding:14px 16px 12px; display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--border); }
+.pname { font-family:'Playfair Display',serif; font-size:1.05rem; }
+.pmeta { font-family:'Inconsolata',monospace; font-size:0.65rem; color:var(--dim); margin-top:3px; }
+.pcard-actions { display:flex; gap:5px; }
+
+/* DRUG LIST */
+.drug-list { padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
+
+/* DRUG ROW */
+.drow { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:11px 12px; transition:border-color .2s; }
+.drow.urgent { border-color:var(--red);    background:var(--red-bg); }
+.drow.warn   { border-color:var(--amber);  background:var(--amber-bg); }
+.drow.low    { border-color:var(--orange); background:var(--orange-bg); }
+
+/* top line */
+.drow-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:9px; gap:8px; }
+.drow-left { display:flex; align-items:flex-start; gap:8px; flex:1; min-width:0; }
+.sdot { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+.sdot.ok     { background:var(--green); }
+.sdot.warn   { background:var(--amber); }
+.sdot.low    { background:var(--orange); }
+.sdot.urgent { background:var(--red); animation:pulse 1.2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+.dname { font-size:0.88rem; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ddose { font-family:'Inconsolata',monospace; font-size:0.67rem; color:var(--muted); margin-top:2px; }
+
+.drow-actions { display:flex; gap:3px; flex-shrink:0; }
+.bico { background:none; border:none; cursor:pointer; color:var(--dim); font-size:0.82rem; padding:4px 6px; border-radius:6px; transition:all .15s; line-height:1; }
+.bico:hover { background:var(--border); color:var(--text); }
+.bico.del:hover { background:var(--red-bg); color:var(--red); }
+.bico.plus { font-size:0.75rem; }
+
+/* stock display */
+.stock-line { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.stock-boxes { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+.box-icon { font-size:1rem; line-height:1; } /* full box */
+.box-partial { position:relative; display:inline-flex; align-items:center; }
+/* progress bar */
+.pbar-wrap { flex:1; }
+.pbar-track { height:4px; background:var(--border); border-radius:2px; overflow:hidden; }
+.pbar-fill { height:100%; border-radius:2px; transition:width .4s; }
+.pbar-fill.ok     { background:var(--green); }
+.pbar-fill.warn   { background:var(--amber); }
+.pbar-fill.low    { background:var(--orange); }
+.pbar-fill.urgent { background:var(--red); }
+
+/* stock text row */
+.stock-text { font-family:'Inconsolata',monospace; font-size:0.7rem; color:var(--muted); display:flex; justify-content:space-between; align-items:center; margin-top:3px; }
+.stock-text strong { color:var(--text); }
+.badge { font-size:0.63rem; font-weight:700; padding:2px 7px; border-radius:10px; letter-spacing:.04em; text-transform:uppercase; }
+.badge.urgent { background:var(--red);    color:#fff; }
+.badge.warn   { background:var(--amber);  color:#fff; }
+.badge.low    { background:var(--orange); color:#fff; }
+
+/* manual controls */
+.drow-controls { display:flex; align-items:center; gap:6px; margin-top:8px; border-top:1px solid var(--border); padding-top:8px; }
+.ctrl-btn { background:var(--surface); border:1px solid var(--border-hi); color:var(--text); border-radius:7px; padding:4px 10px; font-size:0.78rem; font-weight:700; cursor:pointer; transition:all .15s; font-family:'Nunito',sans-serif; }
+.ctrl-btn:hover { background:var(--border); }
+.ctrl-btn.add-box { color:var(--green);  border-color:var(--green); }
+.ctrl-btn.add-box:hover { background:var(--green-bg); }
+.ctrl-btn.sub-cp  { color:var(--amber); border-color:var(--amber); }
+.ctrl-btn.sub-cp:hover { background:var(--amber-bg); }
+.ctrl-label { font-family:'Inconsolata',monospace; font-size:0.67rem; color:var(--dim); flex:1; text-align:right; }
+
+/* add drug */
+.add-drug-btn { display:flex; align-items:center; gap:6px; margin:0 12px 12px; padding:7px 12px; background:none; border:1px dashed var(--border-hi); border-radius:8px; color:var(--dim); font-family:'Nunito',sans-serif; font-size:0.8rem; font-weight:600; cursor:pointer; transition:all .15s; width:calc(100% - 24px); }
+.add-drug-btn:hover { border-color:var(--gold); color:var(--gold); background:var(--gold-bg); }
+
+/* GROUP FILTER BAR */
+.group-bar { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+.gbtn { display:inline-flex; align-items:center; gap:6px; padding:7px 16px; border-radius:20px; border:1.5px solid var(--border-hi); background:var(--surface2); color:var(--muted); font-family:'Nunito',sans-serif; font-size:0.82rem; font-weight:700; cursor:pointer; transition:all .15s; }
+.gBtn-all.active  { background:var(--gold);    border-color:var(--gold);    color:#0F1117; }
+.gBtn-cra.active  { background:#5B8DEF;        border-color:#5B8DEF;        color:#fff; }
+.gBtn-cd.active   { background:#9B59B6;        border-color:#9B59B6;        color:#fff; }
+.gBtn-all:hover   { border-color:var(--gold);  color:var(--gold); }
+.gBtn-cra:hover   { border-color:#5B8DEF;      color:#5B8DEF; }
+.gBtn-cd:hover    { border-color:#9B59B6;      color:#9B59B6; }
+.group-tag { font-family:'Inconsolata',monospace; font-size:0.62rem; font-weight:700; padding:2px 7px; border-radius:10px; letter-spacing:.05em; text-transform:uppercase; }
+.tag-cra  { background:rgba(91,141,239,.15); color:#5B8DEF; border:1px solid #5B8DEF; }
+.tag-cd   { background:rgba(155,89,182,.15); color:#9B59B6; border:1px solid #9B59B6; }
+
+/* EMPTY */
+.empty { text-align:center; padding:80px 20px; color:var(--muted); grid-column:1/-1; }
+.empty .ei { font-size:3rem; opacity:.4; margin-bottom:12px; }
+.empty h3 { font-family:'Playfair Display',serif; font-size:1.3rem; color:var(--text); margin-bottom:5px; }
+
+/* OVERLAY / MODAL */
+.overlay { position:fixed; inset:0; background:rgba(0,0,0,.72); backdrop-filter:blur(6px); z-index:200; display:none; align-items:center; justify-content:center; padding:16px; }
+.overlay.open { display:flex; }
+.modal { background:var(--surface); border:1px solid var(--border-hi); border-radius:16px; padding:26px; width:100%; max-width:480px; box-shadow:0 24px 64px rgba(0,0,0,.6); animation:mIn .2s ease; }
+@keyframes mIn { from{opacity:0;transform:scale(.94) translateY(10px)} to{opacity:1;transform:scale(1) translateY(0)} }
+.modal h3 { font-family:'Playfair Display',serif; font-size:1.2rem; color:var(--gold); margin-bottom:20px; }
+
+.fg { margin-bottom:13px; }
+.fl { display:block; font-family:'Inconsolata',monospace; font-size:0.68rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-bottom:5px; }
+.fi, .fsel { width:100%; padding:10px 12px; background:var(--surface2); border:1px solid var(--border-hi); border-radius:8px; color:var(--text); font-family:'Nunito',sans-serif; font-size:0.9rem; outline:none; transition:border-color .15s; }
+.fi:focus, .fsel:focus { border-color:var(--gold); }
+.fsel option { background:var(--surface2); }
+.frow { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.fhint { font-size:0.73rem; color:var(--dim); margin-top:4px; }
+.fhint strong { color:var(--gold); }
+
+/* stock input group */
+.stock-input-group { display:flex; align-items:center; gap:0; }
+.stock-input-group .fi { border-radius:8px 0 0 8px; border-right:none; text-align:center; }
+.stock-sep { background:var(--border-hi); padding:10px 10px; font-family:'Inconsolata',monospace; font-size:0.8rem; color:var(--muted); border-top:1px solid var(--border-hi); border-bottom:1px solid var(--border-hi); white-space:nowrap; }
+.stock-input-group .fi:last-child { border-radius:0 8px 8px 0; border-left:none; border-right:1px solid var(--border-hi); }
+
+.preview-box { background:var(--surface2); border-radius:9px; padding:11px 14px; font-size:0.82rem; color:var(--muted); display:none; margin-top:10px; line-height:1.7; }
+.preview-box strong { color:var(--gold); }
+.preview-box .pv-boxes { display:flex; gap:3px; margin-top:6px; align-items:center; flex-wrap:wrap; }
+
+.mfooter { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
+
+/* search */
+.sri { padding:10px 12px; border-radius:8px; cursor:pointer; border-bottom:1px solid var(--border); transition:background .15s; }
+.sri:hover { background:var(--surface2); }
+
+/* NOTES PANEL */
+.notes-toggle { display:flex; align-items:center; gap:6px; width:100%; background:none; border:none; border-top:1px solid var(--border); padding:8px 16px; cursor:pointer; color:var(--dim); font-family:'Nunito',sans-serif; font-size:0.78rem; font-weight:600; transition:all .15s; text-align:left; }
+.notes-toggle:hover { color:var(--text); background:var(--surface2); }
+.notes-toggle .nt-arrow { margin-left:auto; transition:transform .2s; font-size:0.7rem; }
+.notes-toggle.open .nt-arrow { transform:rotate(180deg); }
+.notes-panel { display:none; padding:10px 14px 12px; border-top:1px solid var(--border); background:var(--surface2); }
+.notes-panel.open { display:block; }
+.notes-ta { width:100%; background:var(--surface); border:1px solid var(--border-hi); border-radius:8px; color:var(--text); font-family:'Nunito',sans-serif; font-size:0.83rem; padding:9px 11px; resize:vertical; min-height:70px; outline:none; transition:border-color .15s; }
+.notes-ta:focus { border-color:var(--gold); }
+.notes-save { margin-top:7px; font-size:0.75rem; }
+
+/* EXPIRY INFO ROW */
+.expiry-row { display:flex; gap:6px; flex-wrap:wrap; padding:8px 14px 10px; border-top:1px solid var(--border); }
+.expiry-chip { display:flex; align-items:center; gap:5px; font-family:'Inconsolata',monospace; font-size:0.68rem; padding:3px 9px; border-radius:20px; border:1px solid var(--border-hi); color:var(--muted); background:var(--surface2); }
+.expiry-chip.exp-ok     { color:var(--green);  border-color:var(--green);  background:var(--green-bg); }
+.expiry-chip.exp-warn   { color:var(--amber);  border-color:var(--amber);  background:var(--amber-bg); }
+.expiry-chip.exp-urgent { color:var(--red);    border-color:var(--red);    background:var(--red-bg);   }
+.expiry-chip.exp-none   { color:var(--dim);    border-color:var(--border); }
+.load-log { display:flex; flex-direction:column; gap:5px; max-height:220px; overflow-y:auto; margin-top:8px; }
+.load-entry { display:flex; align-items:center; justify-content:space-between; background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:7px 10px; font-family:'Inconsolata',monospace; font-size:0.75rem; color:var(--muted); }
+.load-entry .le-date { color:var(--text); font-weight:600; }
+.load-entry .le-del { background:none; border:none; cursor:pointer; color:var(--dim); font-size:0.8rem; padding:2px 5px; border-radius:4px; transition:all .15s; }
+.load-entry .le-del:hover { background:var(--red-bg); color:var(--red); }
+.load-empty { font-size:0.78rem; color:var(--dim); padding:8px 4px; }
+
+/* PRINT */
+@media print {
+  header, .alert-banner, .toolbar, .drow-controls, .add-drug-btn, .pcard-actions, .drow-actions { display:none !important; }
+  body { background:#fff; color:#111; }
+  .container { padding:0; max-width:100%; }
+  .grid { display:block; }
+  .pcard { border:1.5px solid #ccc; border-radius:8px; margin-bottom:24px; page-break-inside:avoid; background:#fff; box-shadow:none; }
+  .pcard-head { border-bottom:1.5px solid #eee; padding:12px 14px 10px; }
+  .pname { font-size:1.1rem; color:#111; }
+  .pmeta { color:#666; font-size:0.7rem; }
+  .drow { background:#f9f9f9 !important; border:1px solid #ddd !important; margin-bottom:6px; }
+  .drow.urgent { background:#fff0f0 !important; border-color:#e05252 !important; }
+  .drow.warn   { background:#fff8f0 !important; border-color:#e8913a !important; }
+  .sdot { animation:none !important; }
+  .sdot.ok     { background:#22c55e; }
+  .sdot.warn   { background:#e8913a; }
+  .sdot.urgent { background:#e05252; }
+  .dname { color:#111; } .ddose { color:#555; }
+  .pbar-track { background:#e5e7eb; }
+  .pbar-fill.ok { background:#22c55e; } .pbar-fill.warn { background:#e8913a; } .pbar-fill.urgent { background:#e05252; }
+  .stock-text { color:#444; } .stock-text strong { color:#111; }
+  .badge.urgent { background:#e05252; } .badge.warn { background:#e8913a; }
+  .print-only { display:block !important; }
+}
+.print-only { display:none; }
+
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+::-webkit-scrollbar { width:5px; } ::-webkit-scrollbar-track { background:var(--bg); } ::-webkit-scrollbar-thumb { background:var(--border-hi); border-radius:3px; }
+
+/* LOGIN SCREEN */
+.login-screen { position:fixed; inset:0; background:var(--bg); z-index:999; display:flex; align-items:center; justify-content:center; padding:24px; }
+.login-box { background:var(--surface); border:1px solid var(--border-hi); border-radius:20px; padding:40px 36px; width:100%; max-width:380px; text-align:center; box-shadow:0 24px 64px rgba(0,0,0,.6); animation:mIn .3s ease; }
+.login-logo { font-family:'Playfair Display',serif; font-size:2rem; color:var(--gold); margin-bottom:4px; }
+.login-logo em { font-style:italic; color:var(--text); }
+.login-sub { font-size:0.78rem; color:var(--muted); margin-bottom:32px; }
+.login-icon { font-size:2.5rem; margin-bottom:16px; }
+.login-box h3 { font-family:'Playfair Display',serif; font-size:1.1rem; color:var(--text); margin-bottom:20px; }
+.login-input-wrap { position:relative; margin-bottom:12px; }
+.login-input { width:100%; padding:12px 44px 12px 14px; background:var(--surface2); border:1.5px solid var(--border-hi); border-radius:10px; color:var(--text); font-family:'Nunito',sans-serif; font-size:1rem; outline:none; transition:border-color .15s; text-align:center; letter-spacing:.15em; }
+.login-input:focus { border-color:var(--gold); }
+.login-toggle { position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--muted); font-size:1rem; padding:4px; }
+.login-toggle:hover { color:var(--text); }
+.login-btn { width:100%; padding:12px; background:var(--gold); color:#0F1117; border:none; border-radius:10px; font-family:'Nunito',sans-serif; font-size:1rem; font-weight:800; cursor:pointer; transition:all .15s; margin-top:4px; }
+.login-btn:hover { filter:brightness(1.1); }
+.login-error { color:var(--red); font-size:0.8rem; margin-top:8px; min-height:18px; }
+.login-remember { display:flex; align-items:center; justify-content:center; gap:7px; margin-top:14px; font-size:0.8rem; color:var(--muted); cursor:pointer; }
+.login-remember input { cursor:pointer; accent-color:var(--gold); width:15px; height:15px; }
+.login-footer { margin-top:28px; font-size:0.68rem; color:var(--dim); line-height:1.6; }
+
+/* LOCK BTN in header */
+.lock-btn { background:none; border:1px solid var(--border-hi); border-radius:8px; padding:5px 10px; color:var(--muted); cursor:pointer; font-size:0.8rem; transition:all .15s; }
+.lock-btn:hover { color:var(--red); border-color:var(--red); }
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">Ricetta<em>Manager</em></div>
+    <div class="login-sub">Gestione terapie farmacologiche</div>
+    <div class="login-icon">🔒</div>
+    <h3>Accesso protetto</h3>
+    <div class="login-input-wrap">
+      <input class="login-input" type="password" id="loginPwd" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()">
+      <button class="login-toggle" onclick="togglePwdVisibility()" id="loginToggle">👁</button>
+    </div>
+    <button class="login-btn" onclick="doLogin()">Entra</button>
+    <div class="login-error" id="loginError"></div>
+    <label class="login-remember">
+      <input type="checkbox" id="loginRemember"> Ricordami su questo dispositivo
+    </label>
+    <div class="login-footer">
+      Prima volta? La password predefinita è <strong style="color:var(--gold);letter-spacing:.1em">ricetta2025</strong><br>
+      Cambiala dopo il primo accesso dalle impostazioni.
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE PASSWORD MODAL -->
+<div class="overlay" id="ovChangePwd">
+  <div class="modal" style="max-width:400px">
+    <h3>Cambia password</h3>
+    <div class="fg"><label class="fl">Password attuale</label><input class="fi" type="password" id="cpOld" placeholder="Password attuale"></div>
+    <div class="fg"><label class="fl">Nuova password</label><input class="fi" type="password" id="cpNew" placeholder="Minimo 6 caratteri"></div>
+    <div class="fg"><label class="fl">Conferma nuova password</label><input class="fi" type="password" id="cpConfirm" placeholder="Ripeti la nuova password"></div>
+    <div class="login-error" id="cpError"></div>
+    <div class="mfooter">
+      <button class="btn btn-ghost" onclick="closeOv('ovChangePwd')">Annulla</button>
+      <button class="btn btn-gold" onclick="changePassword()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<header>
+  <div class="logo">Ricetta<em>Manager</em></div>
+  <div class="hdr-right">
+    <div class="clock"><div id="hDate"></div><div id="hAlert" style="color:var(--gold);font-weight:700"></div></div>
+    <button class="btn btn-ghost btn-sm" onclick="openSearch()">🔍 Cerca</button>
+    <button class="lock-btn" onclick="openOv('ovChangePwd')" title="Cambia password">🔑</button>
+    <button class="lock-btn" onclick="lockApp()" title="Blocca app">🔒</button>
+    <button class="btn btn-gold" onclick="openAddPatient()">＋ Paziente</button>
+  </div>
+</header>
+
+<div class="alert-banner" id="alertBanner">
+  <div class="alert-inner" id="alertInner">
+    <div class="alert-ttl" id="alertTtl"></div>
+    <div class="alert-chips" id="alertChips"></div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="toolbar">
+    <div>
+      <h2>Terapie attive</h2>
+      <p>Scorte scalate automaticamente · aggiornamento in tempo reale</p>
+    </div>
+    <div class="tbar-right">
+      <button class="btn btn-ghost btn-sm" onclick="render()">⟳ Aggiorna</button>
+      <button class="btn btn-ghost btn-sm" onclick="printInventory(activeGroup)" title="Inventario PDF gruppo attivo">📄 Inventario</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportData()" title="Esporta backup dati">💾 Esporta</button>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('importFile').click()" title="Importa backup dati">📂 Importa</button>
+      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+    </div>
+  </div>
+
+  <!-- GROUP FILTER -->
+  <div class="group-bar">
+    <button class="gbtn gBtn-all active" id="gbtn-all" onclick="setGroup('all')">👥 Tutti <span id="cnt-all"></span></button>
+    <button class="gbtn gBtn-cra" id="gbtn-cra" onclick="setGroup('CRA')">🏠 CRA <span id="cnt-cra"></span></button>
+    <button class="gbtn gBtn-cd"  id="gbtn-cd"  onclick="setGroup('CD')">☀️ Centro Diurno <span id="cnt-cd"></span></button>
+  </div>
+
+  <div class="grid" id="grid"></div>
+</div>
+
+<!-- MODAL: Paziente -->
+<div class="overlay" id="ovPatient">
+  <div class="modal" style="max-width:500px; max-height:90vh; overflow-y:auto;">
+    <h3 id="ptTitle">Nuovo paziente</h3>
+    <div class="fg"><label class="fl">Nome e cognome</label><input class="fi" id="ptName" placeholder="es. Mario Rossi"></div>
+    <div class="frow">
+      <div class="fg"><label class="fl">Codice / ID</label><input class="fi" id="ptCode" placeholder="es. P001"></div>
+      <div class="fg"><label class="fl">Data di nascita</label><input class="fi" type="date" id="ptDob"></div>
+    </div>
+    <div class="fg">
+      <label class="fl">Gruppo</label>
+      <select class="fsel" id="ptGroup" onchange="toggleExpiryFields(this.value)">
+        <option value="CRA">🏠 CRA</option>
+        <option value="CD">☀️ Centro Diurno</option>
+      </select>
+    </div>
+    <div id="ptExpiryFields">
+    <div class="frow">
+      <div class="fg">
+        <label class="fl">Scadenza Tessera Sanitaria</label>
+        <input class="fi" type="date" id="ptTessera">
+      </div>
+      <div class="fg">
+        <label class="fl">Scadenza Medico di Base</label>
+        <input class="fi" type="date" id="ptMedico">
+      </div>
+    </div>
+    </div>
+    <div class="fg">
+      <label class="fl">Note iniziali (opzionale)</label>
+      <textarea class="fi notes-ta" id="ptNotes" placeholder="Promemoria, annotazioni..." style="min-height:60px;resize:vertical;"></textarea>
+    </div>
+    <div class="mfooter">
+      <button class="btn btn-ghost" onclick="closeOv('ovPatient')">Annulla</button>
+      <button class="btn btn-gold" onclick="savePatient()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Farmaco -->
+<div class="overlay" id="ovDrug">
+  <div class="modal">
+    <h3 id="drgTitle">Aggiungi farmaco</h3>
+    <div class="fg"><label class="fl">Nome farmaco</label><input class="fi" id="dName" placeholder="es. Ramipril 5mg"></div>
+    <div class="frow">
+      <div class="fg">
+        <label class="fl">Compresse / die</label>
+        <input class="fi" type="number" id="dCpDie" min="0.25" step="0.25" placeholder="es. 1">
+        <div class="fhint">Frazioni: <strong>0.5</strong> = ½ cp</div>
+      </div>
+      <div class="fg">
+        <label class="fl">Cp per confezione</label>
+        <input class="fi" type="number" id="dCpBox" min="1" step="1" placeholder="es. 30">
+      </div>
+    </div>
+
+    <!-- SCORTA REALE -->
+    <div class="fg">
+      <label class="fl">Scorta attuale — compresse totali</label>
+      <input class="fi" type="number" id="dCpTot" min="0" step="1" placeholder="es. 64  (= 2 conf. da 30 + 4 cp aperte)">
+      <div class="fhint">Conta tutte le compresse: quelle nelle confezioni chiuse <strong>+</strong> quelle nella confezione aperta.</div>
+    </div>
+
+    <div class="preview-box" id="dPreview"></div>
+
+    <div class="mfooter">
+      <button class="btn btn-ghost" onclick="closeOv('ovDrug')">Annulla</button>
+      <button class="btn btn-gold" onclick="saveDrug()">Salva farmaco</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Storico caricamenti -->
+<div class="overlay" id="ovHistory">
+  <div class="modal" style="max-width:520px">
+    <h3 id="histTitle">Storico confezioni</h3>
+    <div id="histDrugName" style="font-family:'Inconsolata',monospace;font-size:0.78rem;color:var(--muted);margin-bottom:14px;"></div>
+    <div class="load-log" id="histLog"></div>
+    <div class="mfooter">
+      <button class="btn btn-ghost" onclick="closeOv('ovHistory')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<!-- PRINT HEADER (visibile solo in stampa) -->
+<div class="print-only" id="printHeader" style="padding:0 0 12px;border-bottom:2px solid #ccc;margin-bottom:18px;">
+  <strong style="font-size:1.1rem;">RicettaManager — Inventario terapie</strong>
+  <span style="float:right;font-size:0.75rem;color:#888;" id="printDate"></span>
+</div>
+<div class="overlay" id="ovSearch">
+  <div class="modal">
+    <h3>Cerca paziente</h3>
+    <input class="fi" id="sQ" placeholder="Nome o codice..." oninput="doSearch()">
+    <div id="sRes" style="margin-top:12px;max-height:260px;overflow-y:auto;"></div>
+    <div class="mfooter"><button class="btn btn-ghost" onclick="closeOv('ovSearch')">Chiudi</button></div>
+  </div>
+</div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────────
+// Drug model:
+//   name, cpDie, cpBox, cpRemaining (source of truth, float),
+//   lastSync (ISO date string — date when cpRemaining was last set/saved)
+// On render: cpNow = cpRemaining - daysSinceLastSync * cpDie  (floored to 0)
+
+function createSafeStorage(type) {
+  try {
+    const store = window[type];
+    const testKey = '__rm3_storage_test__';
+    store.setItem(testKey, '1');
+    store.removeItem(testKey);
+    return store;
+  } catch (err) {
+    const data = {};
+    return {
+      getItem: key => Object.prototype.hasOwnProperty.call(data, key) ? data[key] : null,
+      setItem: (key, value) => { data[key] = String(value); },
+      removeItem: key => { delete data[key]; }
+    };
+  }
+}
+
+const appStorage = createSafeStorage('localStorage');
+const tabStorage = createSafeStorage('sessionStorage');
+
+function loadPatients() {
+  try {
+    const parsed = JSON.parse(appStorage.getItem('rm3_pts') || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    appStorage.removeItem('rm3_pts');
+    return [];
+  }
+}
+
+let patients = loadPatients();
+let editPid = null, editDid = null, curPid = null;
+let activeGroup = 'all'; // 'all' | 'CRA' | 'CD'
+
+function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function save() { appStorage.setItem('rm3_pts', JSON.stringify(patients)); }
+function getP(id) { return patients.find(p=>p.id===id); }
+function today() { return new Date().toISOString().split('T')[0]; }
+
+// ── GROUP FILTER ──────────────────────────────────────────────────────────
+function setGroup(g) {
+  activeGroup = g;
+  ['all','cra','cd'].forEach(k => {
+    const btn = document.getElementById('gbtn-'+k);
+    btn.classList.remove('active');
+  });
+  document.getElementById('gbtn-'+(g==='all'?'all':g.toLowerCase())).classList.add('active');
+  render();
+}
+
+function updateGroupCounts() {
+  const cra = patients.filter(p=>(p.group||'CRA')==='CRA').length;
+  const cd  = patients.filter(p=>p.group==='CD').length;
+  document.getElementById('cnt-all').textContent = `(${patients.length})`;
+  document.getElementById('cnt-cra').textContent = `(${cra})`;
+  document.getElementById('cnt-cd').textContent  = `(${cd})`;
+}
+
+// ── CONSUMPTION ENGINE ────────────────────────────────────────────────────
+function daysBetween(isoA, isoB) {
+  return Math.floor((new Date(isoB) - new Date(isoA)) / 86400000);
+}
+
+// Returns current real pill count (float, ≥ 0)
+function currentCp(drug) {
+  const elapsed = daysBetween(drug.lastSync, today());
+  return Math.max(0, drug.cpRemaining - elapsed * drug.cpDie);
+}
+
+// Derived display values
+function computeDrug(drug) {
+  const cp      = currentCp(drug);
+  const boxes   = Math.floor(cp / drug.cpBox);          // confezioni intere chiuse
+  const partial = cp % drug.cpBox;                       // cp nella conf. aperta (o 0)
+  const hasOpen = partial > 0;                           // c'è una confezione aperta
+  const totalConf = boxes + (hasOpen ? 1 : 0);          // confezioni totali (incl. aperta)
+  const daysLeft  = drug.cpDie > 0 ? Math.floor(cp / drug.cpDie) : Infinity;
+  const maxCp     = drug.cpBox * Math.ceil(drug.cpRemaining / drug.cpBox || 1);
+  const pct       = drug.cpRemaining > 0 ? Math.min(100, (cp / drug.cpRemaining) * 100) : 0;
+
+  // Status: urgent=esaurito, warn=ultima confezione, low=≤10gg (ma più di 1 conf.), ok=tutto bene
+  const status = cp === 0       ? 'urgent'
+               : totalConf <= 1 ? 'warn'
+               : daysLeft <= 10 ? 'low'
+               : 'ok';
+
+  return { cp, boxes, partial: Math.round(partial), hasOpen, totalConf, daysLeft, pct, status };
+}
+
+// ── HEADER ────────────────────────────────────────────────────────────────
+function updateHeader() {
+  document.getElementById('hDate').textContent =
+    new Date().toLocaleDateString('it-IT',{weekday:'short',day:'2-digit',month:'long',year:'numeric'});
+}
+
+// ── ALERTS ────────────────────────────────────────────────────────────────
+function refreshAlerts() {
+  const urgent=[], warn=[], low=[];
+  patients.forEach(p => {
+    p.drugs.forEach(d => {
+      const s = computeDrug(d).status;
+      const lbl = `${p.name} · ${d.name}`;
+      if (s==='urgent') urgent.push(lbl);
+      else if (s==='warn') warn.push(lbl);
+      else if (s==='low')  low.push(lbl);
+    });
+    [{label:'Tessera', date:p.tessera},{label:'Medico', date:p.medico}].forEach(({label, date}) => {
+      if (!date) return;
+      const days = daysBetween(today(), date);
+      const lbl  = `${p.name} · ${label}`;
+      if (days < 0)        urgent.push(lbl + ' (scaduto)');
+      else if (days <= 30) warn.push(lbl + ` (${days}gg)`);
+    });
+  });
+  const banner = document.getElementById('alertBanner');
+  const inner  = document.getElementById('alertInner');
+  const total  = urgent.length + warn.length + low.length;
+  if (!total) {
+    banner.classList.remove('show');
+    document.getElementById('hAlert').textContent = '✓ Tutto OK';
+    return;
+  }
+  banner.classList.add('show');
+  const isUrgent = urgent.length > 0;
+  const isWarn   = warn.length > 0;
+  inner.className = 'alert-inner ' + (isUrgent ? 'urgent' : 'warn');
+  document.getElementById('alertTtl').textContent = isUrgent
+    ? `⚠ ${urgent.length} alert urgent${urgent.length>1?'i':'o'}`
+    : isWarn
+    ? `📦 ${warn.length} farmac${warn.length>1?'i':'o'} all'ultima confezione`
+    : `⏱ ${low.length} farmac${low.length>1?'i':'o'} in esaurimento (≤10gg)`;
+  document.getElementById('alertChips').innerHTML = [
+    ...urgent.map(l=>`<span class="chip urgent">${l}</span>`),
+    ...warn.map(l=>`<span class="chip warn">${l}</span>`),
+    ...low.map(l=>`<span class="chip" style="background:rgba(211,84,0,.15);border:1px solid rgba(211,84,0,.4);color:var(--text)">${l}</span>`)
+  ].join('');
+  document.getElementById('hAlert').textContent = `${total} alert attiv${total>1?'i':'o'}`;
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────
+function render(filterIds) {
+  const grid = document.getElementById('grid');
+  let list = filterIds ? patients.filter(p=>filterIds.includes(p.id)) : [...patients];
+
+  // Apply group filter
+  if (activeGroup !== 'all') list = list.filter(p=>(p.group||'CRA')===activeGroup);
+
+  const score = p => { const ss = p.drugs.map(d=>computeDrug(d).status); return ss.includes('urgent')?0:ss.includes('warn')?1:ss.includes('low')?2:3; };
+  list.sort((a,b)=>score(a)-score(b));
+  updateGroupCounts();
+
+  grid.innerHTML = '';
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty"><div class="ei">💊</div><h3>Nessun paziente</h3><p>${activeGroup==='all'?'Premi "+ Paziente" per iniziare.':'Nessun paziente in questo gruppo.'}</p></div>`;
+    refreshAlerts(); return;
+  }
+
+  list.forEach(patient => {
+    const ws  = score(patient)===0?'urgent':score(patient)===1?'warn':score(patient)===2?'low':'ok';
+    const grp = patient.group||'CRA';
+    const isCd = grp==='CD';
+    const grpTag = `<span class="group-tag tag-${grp.toLowerCase()}">${grp}</span>`;
+
+    const rows = patient.drugs.map(drug => {
+      const c = computeDrug(drug);
+      const s = c.status;
+      const pct = c.pct.toFixed(1);
+      let boxIcons = '';
+      for (let i=0;i<Math.min(c.boxes,8);i++) boxIcons += `<span class="box-icon">📦</span>`;
+      if (c.boxes>8) boxIcons += `<span style="font-family:Inconsolata,monospace;font-size:0.7rem;color:var(--muted)"> +${c.boxes-8}</span>`;
+      if (c.hasOpen) boxIcons += `<span style="font-family:Inconsolata,monospace;font-size:0.72rem;color:var(--amber);margin-left:2px">[${c.partial}cp]</span>`;
+      if (!boxIcons) boxIcons = `<span style="font-family:Inconsolata,monospace;font-size:0.72rem;color:var(--red)">Nessuna scorta</span>`;
+      const badge = s==='urgent'?`<span class="badge urgent">ESAURITO</span>`:s==='warn'?`<span class="badge warn">ULTIMA CONF.</span>`:s==='low'?`<span class="badge low">≤10 GIORNI</span>`:'';
+      const daysStr = s==='urgent'?'0 giorni':isFinite(c.daysLeft)?`${c.daysLeft} gg`:'—';
+      return `
+        <div class="drow ${s}" id="dr-${drug.id}">
+          <div class="drow-top">
+            <div class="drow-left">
+              <div class="sdot ${s}"></div>
+              <div style="min-width:0">
+                <div class="dname">${drug.name}</div>
+                <div class="ddose">${drug.cpDie} cp/die · ${drug.cpBox} cp/conf.</div>
+              </div>
+            </div>
+            <div class="drow-actions">
+              <button class="bico" title="Storico caricamenti" onclick="openHistory('${patient.id}','${drug.id}')">📋</button>
+              <button class="bico" title="Modifica" onclick="openEditDrug('${patient.id}','${drug.id}')">✎</button>
+              <button class="bico del" title="Elimina" onclick="deleteDrug('${patient.id}','${drug.id}')">✕</button>
+            </div>
+          </div>
+          <div class="stock-line"><div class="stock-boxes">${boxIcons}</div></div>
+          <div class="pbar-wrap"><div class="pbar-track"><div class="pbar-fill ${s}" style="width:${pct}%"></div></div></div>
+          <div class="stock-text"><span><strong>${Math.round(c.cp)} cp</strong> rimaste · ${daysStr} di terapia</span>${badge}</div>
+          <div class="drow-controls">
+            <button class="ctrl-btn add-box" onclick="addBox('${patient.id}','${drug.id}')">＋ 1 conf.</button>
+            <button class="ctrl-btn sub-cp"  onclick="subCp('${patient.id}','${drug.id}')">－ 1 cp</button>
+            <span class="ctrl-label">Sync: ${drug.lastSync}</span>
+          </div>
+        </div>`;
+    }).join('') || '<p style="color:var(--dim);font-size:0.8rem;padding:4px 2px">Nessun farmaco</p>';
+
+    const code = `<div class="pmeta">${grpTag}${patient.code?' '+patient.code:''}${patient.dob?' · '+new Date(patient.dob+'T12:00').toLocaleDateString('it-IT'):''}</div>`;
+
+    function expiryChip(label, dateStr) {
+      if (!dateStr) return `<span class="expiry-chip exp-none">🪪 ${label}: —</span>`;
+      const days = daysBetween(today(), dateStr);
+      const cls  = days < 0 ? 'exp-urgent' : days <= 30 ? 'exp-warn' : 'exp-ok';
+      const icon = days < 0 ? '❌' : days <= 30 ? '⚠️' : '✓';
+      const txt  = days < 0 ? `scaduta ${Math.abs(days)}gg fa` : days === 0 ? 'scade oggi' : `${days}gg`;
+      return `<span class="expiry-chip ${cls}">${icon} ${label}: ${txt}</span>`;
+    }
+    const expiryRow = !isCd ? `<div class="expiry-row">${expiryChip('Tessera',patient.tessera)}${expiryChip('Medico',patient.medico)}</div>` : '';
+
+    const hasNotes = patient.notes && patient.notes.trim();
+    const notesLabel = hasNotes ? '📝 Note' : '📝 Aggiungi nota';
+
+    grid.innerHTML += `
+      <div class="pcard s-${ws}" id="card-${patient.id}">
+        <div class="pcard-head">
+          <div><div class="pname">${patient.name}</div>${code}</div>
+          <div class="pcard-actions">
+            <button class="btn btn-ghost btn-sm" onclick="printPatient('${patient.id}')" title="Stampa inventario">🖨️</button>
+            <button class="btn btn-ghost btn-sm" onclick="openEditPatient('${patient.id}')">✎</button>
+            <button class="btn btn-red btn-sm" onclick="delPatient('${patient.id}')">✕</button>
+          </div>
+        </div>
+        ${expiryRow}
+        <div class="drug-list">${rows}</div>
+        <button class="add-drug-btn" onclick="openAddDrug('${patient.id}')">＋ Aggiungi farmaco</button>
+        <button class="notes-toggle" id="nt-${patient.id}" onclick="toggleNotes('${patient.id}')">
+          ${notesLabel}
+          ${hasNotes?`<span style="font-family:Inconsolata,monospace;font-size:0.65rem;color:var(--muted);margin-left:4px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${patient.notes.substring(0,40)}${patient.notes.length>40?'…':''}</span>`:''}
+          <span class="nt-arrow">▼</span>
+        </button>
+        <div class="notes-panel" id="np-${patient.id}">
+          <textarea class="notes-ta" id="nta-${patient.id}" placeholder="Scrivi un promemoria...">${patient.notes||''}</textarea>
+          <div style="display:flex;justify-content:flex-end;margin-top:6px;">
+            <button class="btn btn-gold btn-sm notes-save" onclick="saveNotes('${patient.id}')">💾 Salva nota</button>
+          </div>
+        </div>
+      </div>`;
+  });
+
+  refreshAlerts();
+}
+
+// ── MANUAL CONTROLS ───────────────────────────────────────────────────────
+// Sync cpRemaining to current real value, then apply delta, reset lastSync=today
+function syncAndAdjust(pid, did, deltaCp) {
+  const d = getP(pid).drugs.find(x=>x.id===did);
+  const now = currentCp(d);
+  d.cpRemaining = Math.max(0, now + deltaCp);
+  d.lastSync = today();
+  save(); render();
+}
+
+function addBox(pid, did) {
+  const d = getP(pid).drugs.find(x=>x.id===did);
+  // Log the load event
+  if (!d.loadHistory) d.loadHistory = [];
+  d.loadHistory.unshift({ date: today(), boxes: 1 });
+  syncAndAdjust(pid, did, d.cpBox);
+}
+
+// ── PRINT ─────────────────────────────────────────────────────────────────
+function printPatient(pid) {
+  const p = getP(pid);
+  // Temporarily hide all other cards
+  const allCards = document.querySelectorAll('.pcard');
+  const target   = document.getElementById('card-'+pid);
+  allCards.forEach(c => { if(c!==target) c.style.display='none'; });
+  document.getElementById('printDate').textContent =
+    'Stampato il ' + new Date().toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'});
+  window.print();
+  allCards.forEach(c => c.style.display='');
+}
+
+// ── LOAD HISTORY ──────────────────────────────────────────────────────────
+function openHistory(pid, did) {
+  const p = getP(pid);
+  const d = p.drugs.find(x=>x.id===did);
+  document.getElementById('histTitle').textContent = 'Storico caricamenti';
+  document.getElementById('histDrugName').textContent = `${p.name} · ${d.name}`;
+  renderHistoryLog(pid, did);
+  openOv('ovHistory');
+}
+
+function renderHistoryLog(pid, did) {
+  const d = getP(pid).drugs.find(x=>x.id===did);
+  const log = d.loadHistory || [];
+  const el  = document.getElementById('histLog');
+  if (!log.length) {
+    el.innerHTML = '<div class="load-empty">Nessun caricamento registrato.<br>Usa il pulsante <strong>＋ 1 conf.</strong> per tracciare le confezioni aggiunte.</div>';
+    return;
+  }
+  el.innerHTML = log.map((entry, i) => `
+    <div class="load-entry">
+      <span>📦 +${entry.boxes} confezione${entry.boxes>1?'i':''}</span>
+      <span class="le-date">${new Date(entry.date+'T12:00').toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'})}</span>
+      <button class="le-del" onclick="deleteHistoryEntry('${pid}','${did}',${i})" title="Elimina voce">✕</button>
+    </div>`).join('');
+}
+
+function deleteHistoryEntry(pid, did, idx) {
+  const d = getP(pid).drugs.find(x=>x.id===did);
+  d.loadHistory.splice(idx, 1);
+  save();
+  renderHistoryLog(pid, did);
+}
+function subCp(pid, did) {
+  syncAndAdjust(pid, did, -1);
+}
+
+// ── NOTES ─────────────────────────────────────────────────────────────────
+function toggleNotes(pid) {
+  const btn   = document.getElementById('nt-'+pid);
+  const panel = document.getElementById('np-'+pid);
+  btn.classList.toggle('open');
+  panel.classList.toggle('open');
+}
+function saveNotes(pid) {
+  const p = getP(pid);
+  p.notes = document.getElementById('nta-'+pid).value;
+  save(); render();
+}
+
+// ── PATIENT CRUD ──────────────────────────────────────────────────────────
+function openAddPatient() {
+  editPid=null;
+  document.getElementById('ptTitle').textContent='Nuovo paziente';
+  ['ptName','ptCode','ptDob','ptTessera','ptMedico','ptNotes'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('ptGroup').value='CRA';
+  toggleExpiryFields('CRA');
+  openOv('ovPatient');
+}
+function openEditPatient(id) {
+  editPid=id; const p=getP(id);
+  document.getElementById('ptTitle').textContent='Modifica paziente';
+  document.getElementById('ptName').value=p.name;
+  document.getElementById('ptCode').value=p.code||'';
+  document.getElementById('ptDob').value=p.dob||'';
+  document.getElementById('ptTessera').value=p.tessera||'';
+  document.getElementById('ptMedico').value=p.medico||'';
+  document.getElementById('ptNotes').value=p.notes||'';
+  const grp = p.group||'CRA';
+  document.getElementById('ptGroup').value=grp;
+  toggleExpiryFields(grp);
+  openOv('ovPatient');
+}
+function toggleExpiryFields(grp) {
+  document.getElementById('ptExpiryFields').style.display = grp==='CD' ? 'none' : 'block';
+}
+function savePatient() {
+  const name=document.getElementById('ptName').value.trim();
+  if(!name){alert('Inserisci il nome.');return;}
+  const grp=document.getElementById('ptGroup').value;
+  if(editPid){
+    const p=getP(editPid);
+    p.name=name; p.code=document.getElementById('ptCode').value.trim();
+    p.dob=document.getElementById('ptDob').value;
+    p.group=grp;
+    p.tessera=grp==='CD'?'':document.getElementById('ptTessera').value;
+    p.medico=grp==='CD'?'':document.getElementById('ptMedico').value;
+    p.notes=document.getElementById('ptNotes').value;
+  } else {
+    patients.push({
+      id:uid(), name,
+      code:document.getElementById('ptCode').value.trim(),
+      dob:document.getElementById('ptDob').value,
+      group:grp,
+      tessera:grp==='CD'?'':document.getElementById('ptTessera').value,
+      medico:grp==='CD'?'':document.getElementById('ptMedico').value,
+      notes:document.getElementById('ptNotes').value,
+      drugs:[]
+    });
+  }
+  save(); closeOv('ovPatient'); render();
+}
+function delPatient(id) {
+  if(!confirm(`Rimuovere ${getP(id).name}?`))return;
+  patients=patients.filter(p=>p.id!==id); save(); render();
+}
+
+// ── DRUG CRUD ─────────────────────────────────────────────────────────────
+function openAddDrug(pid) {
+  curPid=pid; editDid=null;
+  document.getElementById('drgTitle').textContent='Aggiungi farmaco';
+  ['dName','dCpDie','dCpBox','dCpTot'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('dPreview').style.display='none';
+  openOv('ovDrug');
+}
+function openEditDrug(pid, did) {
+  curPid=pid; editDid=did;
+  const d=getP(pid).drugs.find(x=>x.id===did);
+  document.getElementById('drgTitle').textContent='Modifica farmaco';
+  document.getElementById('dName').value=d.name;
+  document.getElementById('dCpDie').value=d.cpDie;
+  document.getElementById('dCpBox').value=d.cpBox;
+  // Show current real pill count
+  document.getElementById('dCpTot').value=Math.round(currentCp(d));
+  updatePreview();
+  openOv('ovDrug');
+}
+
+function updatePreview() {
+  const cpDie = parseFloat(document.getElementById('dCpDie').value);
+  const cpBox  = parseInt(document.getElementById('dCpBox').value);
+  const cpTot  = parseInt(document.getElementById('dCpTot').value);
+  const prev   = document.getElementById('dPreview');
+  if (!cpDie||!cpBox||isNaN(cpTot)) { prev.style.display='none'; return; }
+  const boxes   = Math.floor(cpTot/cpBox);
+  const partial = cpTot%cpBox;
+  const days    = cpDie>0?Math.floor(cpTot/cpDie):Infinity;
+  let boxHtml='';
+  for(let i=0;i<Math.min(boxes,8);i++) boxHtml+=`<span>📦</span>`;
+  if(boxes>8) boxHtml+=`<span style="font-size:0.7rem;color:var(--muted)">+${boxes-8}</span>`;
+  if(partial>0) boxHtml+=`<span style="font-size:0.72rem;color:var(--amber)">[${partial}cp aperta]</span>`;
+  prev.style.display='block';
+  prev.innerHTML = `
+    <strong>${cpTot} compresse totali</strong><br>
+    ${boxes} conf. intere${partial>0?` + ${partial} cp nella conf. aperta`:''} · scorte per <strong>${isFinite(days)?days+'gg':'—'}</strong>
+    <div class="pv-boxes">${boxHtml||'<span style="color:var(--red);font-size:0.75rem">Nessuna scorta</span>'}</div>`;
+}
+['dCpDie','dCpBox','dCpTot'].forEach(id=>document.getElementById(id).addEventListener('input',updatePreview));
+
+function saveDrug() {
+  const name  = document.getElementById('dName').value.trim();
+  const cpDie = parseFloat(document.getElementById('dCpDie').value);
+  const cpBox = parseInt(document.getElementById('dCpBox').value);
+  const cpTot = parseInt(document.getElementById('dCpTot').value);
+  if(!name||!cpDie||!cpBox||isNaN(cpTot)){alert('Compila tutti i campi.');return;}
+  const p=getP(curPid);
+  if(editDid){
+    const d=p.drugs.find(x=>x.id===editDid);
+    Object.assign(d,{name,cpDie,cpBox,cpRemaining:cpTot,lastSync:today()});
+  } else {
+    p.drugs.push({id:uid(),name,cpDie,cpBox,cpRemaining:cpTot,lastSync:today()});
+  }
+  save(); closeOv('ovDrug'); render();
+}
+function deleteDrug(pid,did){
+  const d=getP(pid).drugs.find(x=>x.id===did);
+  if(!confirm(`Rimuovere "${d.name}"?`))return;
+  getP(pid).drugs=getP(pid).drugs.filter(x=>x.id!==did);
+  save(); render();
+}
+
+// ── SEARCH ────────────────────────────────────────────────────────────────
+function openSearch(){document.getElementById('sQ').value='';document.getElementById('sRes').innerHTML='';openOv('ovSearch');}
+function doSearch(){
+  const q=document.getElementById('sQ').value.toLowerCase();
+  const r=document.getElementById('sRes');
+  if(!q){r.innerHTML='';return;}
+  const f=patients.filter(p=>p.name.toLowerCase().includes(q)||(p.code||'').toLowerCase().includes(q));
+  if(!f.length){r.innerHTML='<p style="color:var(--muted);font-size:0.83rem;padding:8px">Nessun risultato.</p>';return;}
+  r.innerHTML=f.map(p=>`<div class="sri" onclick="scrollCard('${p.id}')"><strong>${p.name}</strong>${p.code?` <span style="font-family:Inconsolata,monospace;font-size:0.68rem;color:var(--muted)">${p.code}</span>`:''}<div style="font-size:0.74rem;color:var(--muted);margin-top:2px">${p.drugs.length} farmaci</div></div>`).join('');
+}
+function scrollCard(id){
+  closeOv('ovSearch');
+  setTimeout(()=>{
+    const el=document.getElementById('card-'+id);
+    if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.style.outline='2px solid var(--gold)';setTimeout(()=>el.style.outline='',1600);}
+  },180);
+}
+
+// ── OVERLAY ───────────────────────────────────────────────────────────────
+function openOv(id) {document.getElementById(id).classList.add('open');}
+function closeOv(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.overlay.open').forEach(o=>o.classList.remove('open'));});
+
+// ── BACKUP / RIPRISTINO ───────────────────────────────────────────────────
+function exportData() {
+  if (!patients.length) { alert('Nessun dato da esportare.'); return; }
+  const payload = {
+    version: 3,
+    exportedAt: new Date().toISOString(),
+    patients
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const dateStr = new Date().toISOString().split('T')[0];
+  a.href     = url;
+  a.download = `ricettamanager-backup-${dateStr}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const payload = JSON.parse(e.target.result);
+      if (!payload.patients || !Array.isArray(payload.patients)) throw new Error('Formato non valido');
+      const n = payload.patients.length;
+
+      if (patients.length === 0) {
+        // No existing data — just import
+        patients = payload.patients;
+        save(); render();
+        alert(`✓ Importazione completata: ${n} pazienti caricati.`);
+      } else {
+        // Ask: merge or replace?
+        const choice = confirm(
+          `Hai già ${patients.length} pazienti nell'app.\n\n` +
+          `OK → AGGIUNGI i ${n} nuovi pazienti a quelli esistenti\n` +
+          `Annulla → SOSTITUISCI tutto con i ${n} pazienti del file`
+        );
+        if (choice) {
+          // MERGE: add only patients whose id doesn't already exist
+          const existingIds = new Set(patients.map(p => p.id));
+          const toAdd = payload.patients.filter(p => !existingIds.has(p.id));
+          patients = [...patients, ...toAdd];
+          save(); render();
+          alert(`✓ Aggiunti ${toAdd.length} nuovi pazienti. Totale: ${patients.length}.`);
+        } else {
+          if (!confirm(`Confermi di voler SOSTITUIRE tutti i dati esistenti con i ${n} pazienti del file? Questa azione non è reversibile.`)) return;
+          patients = payload.patients;
+          save(); render();
+          alert(`✓ Sostituzione completata: ${n} pazienti caricati.`);
+        }
+      }
+    } catch(err) {
+      alert('Errore: file non valido o danneggiato.\n' + err.message);
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ── INVENTARIO PDF ────────────────────────────────────────────────────────
+function printInventory(group) {
+  const filtered = group && group!=='all' ? patients.filter(p=>(p.group||'CRA')===group) : patients;
+  if (!filtered.length) { alert('Nessun paziente da stampare.'); return; }
+
+  const dateStr    = new Date().toLocaleDateString('it-IT', {day:'2-digit', month:'long', year:'numeric'});
+  const timeStr    = new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+  const groupLabel = group==='CRA'?'CRA':group==='CD'?'Centro Diurno':'Tutti i gruppi';
+
+  const dateField  = `<span class="date-field" aria-label="data">
+    <span class="date-box date-day"></span>
+    <span class="date-sep">/</span>
+    <span class="date-box date-month"></span>
+    <span class="date-sep">/</span>
+    <span class="date-box date-year"></span>
+  </span>`;
+
+  let alertRows = '', stockRows = '';
+  let totUrgent = 0, totWarn = 0, totLow = 0;
+
+  const sorted = [...filtered].sort((a,b) => a.name.localeCompare(b.name));
+
+  sorted.forEach(p => {
+    if (!p.drugs.length) return;
+
+    // ── SEZIONE 1: farmaci in alert ──
+    const alertDrugs = p.drugs.filter(d => ['urgent','warn','low'].includes(computeDrug(d).status));
+    alertDrugs.forEach((drug, idx) => {
+      const c = computeDrug(drug);
+      const s = c.status;
+      if (s==='urgent') totUrgent++;
+      else if (s==='warn') totWarn++;
+      else if (s==='low')  totLow++;
+      const cpTxt   = s==='urgent' ? '0 cp' : `${Math.round(c.cp)} cp`;
+      const daysTxt = s==='urgent' ? '0 gg'  : isFinite(c.daysLeft) ? `${c.daysLeft} gg` : '—';
+      const dot     = s==='urgent' ? '<span class="dot dot-r">●</span>'
+                    : s==='warn'   ? '<span class="dot dot-a">●</span>'
+                    :                '<span class="dot dot-o">●</span>';
+      const rowBg   = s==='urgent' ? '#fff0f0' : s==='warn' ? '#fff8f0' : '#fffbf5';
+      const nameCell = idx===0
+        ? `<td class="pt-name" rowspan="${alertDrugs.length}">${p.name}${p.code?`<br><span class="pt-code">${p.code}</span>`:''}</td>`
+        : '';
+      alertRows += `<tr style="background:${rowBg}">
+        ${nameCell}
+        <td class="pt-drug">${dot} ${drug.name}</td>
+        <td class="pt-stock">${cpTxt} · ${daysTxt}</td>
+        <td class="pt-wf">${dateField}</td>
+        <td class="pt-wf">${dateField}</td>
+        <td class="pt-wf">${dateField}</td>
+      </tr>`;
+    });
+    if (alertDrugs.length) alertRows += `<tr class="pt-sep"><td colspan="6"></td></tr>`;
+
+    // ── SEZIONE 2: tutti i farmaci ──
+    p.drugs.forEach((drug, idx) => {
+      const c = computeDrug(drug);
+      const s = c.status;
+      const cpTxt   = s==='urgent' ? '0 cp' : `${Math.round(c.cp)} cp`;
+      const daysTxt = s==='urgent' ? '0 gg'  : isFinite(c.daysLeft) ? `${c.daysLeft} gg` : '—';
+      const boxTxt  = s==='urgent' ? 'Esaurito' : c.boxes===0 ? `Ult. conf. [${c.partial}cp]` : `${c.boxes} conf.${c.hasOpen?` +[${c.partial}cp]`:''}`;
+      const dot     = s==='urgent' ? '<span class="dot dot-r">●</span>'
+                    : s==='warn'   ? '<span class="dot dot-a">●</span>'
+                    : s==='low'    ? '<span class="dot dot-o">●</span>'
+                    :                '<span class="dot dot-g">●</span>';
+      const nameCell = idx===0
+        ? `<td class="pt-name" rowspan="${p.drugs.length}">${p.name}${p.code?`<br><span class="pt-code">${p.code}</span>`:''}</td>`
+        : '';
+      stockRows += `<tr>
+        ${nameCell}
+        <td class="pt-drug">${dot} ${drug.name}</td>
+        <td class="pt-stock">${cpTxt} · ${daysTxt}</td>
+        <td class="pt-boxes">${boxTxt}</td>
+      </tr>`;
+    });
+    stockRows += `<tr class="pt-sep"><td colspan="4"></td></tr>`;
+  });
+
+  const needRicetta  = totUrgent + totWarn + totLow;
+  const summaryColor = totUrgent>0 ? '#C0392B' : totWarn>0 ? '#D35400' : totLow>0 ? '#D35400' : '#1E8449';
+  const summaryTxt   = needRicetta > 0
+    ? `${needRicetta} farmaci richiedono ricetta  ·  ${totUrgent} esauriti  ·  ${totWarn} ultima conf.  ·  ${totLow} ≤10 giorni`
+    : '✓ Tutte le scorte nella norma';
+
+  const html = `<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8">
+<title>Inventario Terapie — ${dateStr}</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px; color:#111; padding:22px 26px; }
+
+  /* toolbar — nascosta in stampa */
+  .toolbar-inv { display:flex; gap:10px; margin-bottom:22px; }
+  .toolbar-inv button { padding:10px 22px; border-radius:8px; border:none; cursor:pointer; font-size:13px; font-weight:700; }
+  .btn-print { background:#E8B84B; color:#111; }
+  .btn-close { background:#eee; color:#333; }
+
+  /* intestazione documento */
+  .inv-header { display:flex; justify-content:space-between; align-items:flex-end; border-bottom:3px solid #111; padding-bottom:10px; margin-bottom:14px; }
+  .inv-title { font-size:1.5rem; font-weight:900; letter-spacing:-.5px; color:#111; }
+  .inv-sub   { font-size:0.78rem; color:#555; margin-top:4px; }
+  .inv-date  { font-size:0.72rem; color:#666; text-align:right; line-height:1.8; }
+
+  /* riepilogo stato */
+  .summary { display:inline-block; margin-bottom:20px; padding:6px 16px; border-radius:4px; font-size:0.78rem; font-weight:700; background:${summaryColor}; color:#fff; }
+
+  /* titoli sezione */
+  .section-title {
+    font-size:0.72rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase;
+    color:#fff; padding:6px 12px; margin:22px 0 0;
+    display:flex; align-items:center; gap:8px;
+  }
+  .section-title.alert-hdr { background:#C0392B; }
+  .section-title.stock-hdr { background:#1A5276; }
+
+  /* tabelle */
+  table { width:100%; border-collapse:collapse; }
+  thead tr { background:#F2F3F4; }
+  th {
+    padding:7px 9px; text-align:left;
+    font-size:0.68rem; font-weight:900; letter-spacing:.08em; text-transform:uppercase;
+    color:#333; border-bottom:2px solid #AAB7B8;
+  }
+  th.th-wf {
+    background:#F3D36B;
+    color:#111;
+    border:2px solid #8A6D00;
+    border-bottom:3px solid #111;
+    text-align:center;
+    font-size:0.74rem;
+    letter-spacing:.05em;
+  }
+  td { padding:5px 9px; border-bottom:1px solid #E8EAED; vertical-align:middle; }
+  .pt-name  { font-weight:800; font-size:0.82rem; color:#111; white-space:nowrap; border-right:2px solid #D5D8DC; min-width:100px; }
+  .pt-code  { font-family:monospace; font-size:0.62rem; color:#999; font-weight:400; }
+  .pt-drug  { font-size:0.8rem; color:#222; }
+  .pt-stock { font-family:monospace; font-size:0.75rem; color:#444; white-space:nowrap; font-weight:600; }
+  .pt-boxes { font-family:monospace; font-size:0.72rem; color:#666; white-space:nowrap; }
+  .pt-wf {
+    text-align:center;
+    min-width:128px;
+    padding:10px 9px;
+    background:#fff;
+    border-left:1.5px solid #B7950B;
+    border-bottom:1.5px solid #D5D8DC;
+  }
+  .date-field {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:5px;
+    width:100%;
+    font-family:monospace;
+    font-size:0.82rem;
+    font-weight:900;
+    color:#111;
+    white-space:nowrap;
+  }
+  .date-box {
+    display:inline-block;
+    height:22px;
+    border:2.2px solid #111;
+    border-radius:2px;
+    background:#fff;
+  }
+  .date-day,
+  .date-month { width:30px; }
+  .date-year  { width:52px; }
+  .date-sep {
+    font-weight:900;
+    color:#111;
+    line-height:22px;
+  }
+  .pt-sep td { padding:2px 0; border-bottom:2px solid #EBF5FB; }
+  .dot   { font-weight:900; margin-right:3px; }
+  .dot-r { color:#C0392B; }
+  .dot-a { color:#D35400; }
+  .dot-o { color:#D4AC0D; }
+  .dot-g { color:#1E8449; }
+
+  /* legenda */
+  .legend { margin-top:18px; display:flex; gap:16px; font-size:0.68rem; color:#666; flex-wrap:wrap; border-top:1px solid #eee; padding-top:10px; }
+  .legend span { display:flex; align-items:center; gap:4px; }
+
+  @media print {
+    .toolbar-inv { display:none !important; }
+    body { padding:8px 12px; }
+    @page { margin:.7cm; size:A4 landscape; }
+    .section-title { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .summary { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    th.th-wf { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+</style></head><body>
+
+<div class="toolbar-inv">
+  <button class="btn-print" onclick="window.print()">🖨️ Stampa / Salva PDF</button>
+  <button class="btn-close" onclick="window.close()">✕ Chiudi</button>
+</div>
+
+<div class="inv-header">
+  <div>
+    <div class="inv-title">Inventario Terapie · ${groupLabel}</div>
+    <div class="inv-sub">RicettaManager · ${sorted.length} pazienti · ${sorted.reduce((a,p)=>a+p.drugs.length,0)} farmaci totali</div>
+  </div>
+  <div class="inv-date"><strong>Generato il ${dateStr}</strong><br>alle ${timeStr}</div>
+</div>
+
+<div class="summary">${summaryTxt}</div>
+
+${needRicetta > 0 ? `
+<div class="section-title alert-hdr">⚠&nbsp; Farmaci che richiedono ricetta &nbsp;·&nbsp; ${needRicetta} farmaci</div>
+<table>
+  <thead><tr>
+    <th style="width:14%">Paziente</th>
+    <th style="width:22%">Farmaco</th>
+    <th style="width:12%">Scorta</th>
+    <th class="th-wf" style="width:17%">Ricetta richiesta</th>
+    <th class="th-wf" style="width:17%">Ricetta prodotta</th>
+    <th class="th-wf" style="width:18%">Farmaco consegnato</th>
+  </tr></thead>
+  <tbody>${alertRows}</tbody>
+</table>` : ''}
+
+<div class="section-title stock-hdr">📋&nbsp; Scorte farmaci &nbsp;·&nbsp; tutti i pazienti</div>
+<table>
+  <thead><tr>
+    <th style="width:18%">Paziente</th>
+    <th style="width:34%">Farmaco</th>
+    <th style="width:24%">Scorta</th>
+    <th style="width:24%">Confezioni</th>
+  </tr></thead>
+  <tbody>${stockRows}</tbody>
+</table>
+
+<div class="legend">
+  <span><span class="dot dot-g">●</span> Scorta OK</span>
+  <span><span class="dot dot-o">●</span> ≤10 giorni</span>
+  <span><span class="dot dot-a">●</span> Ultima confezione</span>
+  <span><span class="dot dot-r">●</span> Esaurito</span>
+</div>
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=1100,height=750');
+  win.document.write(html);
+  win.document.close();
+  win.onload = () => { win.focus(); };
+}
+
+// ── AUTH ──────────────────────────────────────────────────────────────────
+const PWD_KEY      = 'rm3_pwd';
+const SESSION_KEY  = 'rm3_session';
+const DEFAULT_PWD  = 'ricetta2025';
+
+function getStoredPwd() { return appStorage.getItem(PWD_KEY) || DEFAULT_PWD; }
+
+function checkSession() {
+  // If "remember me" token exists and is valid → skip login
+  const token = appStorage.getItem(SESSION_KEY);
+  if (token === 'persistent') return true;
+  // Session token (tab-level) via sessionStorage
+  if (tabStorage.getItem(SESSION_KEY) === 'active') return true;
+  return false;
+}
+
+function doLogin() {
+  const pwd   = document.getElementById('loginPwd').value;
+  const err   = document.getElementById('loginError');
+  const remember = document.getElementById('loginRemember').checked;
+  if (pwd === getStoredPwd()) {
+    if (remember) appStorage.setItem(SESSION_KEY, 'persistent');
+    else tabStorage.setItem(SESSION_KEY, 'active');
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('loginPwd').value = '';
+    err.textContent = '';
+  } else {
+    err.textContent = 'Password errata. Riprova.';
+    document.getElementById('loginPwd').value = '';
+    document.getElementById('loginPwd').focus();
+  }
+}
+
+function lockApp() {
+  if (!confirm('Vuoi bloccare l\'app?')) return;
+  tabStorage.removeItem(SESSION_KEY);
+  // Don't remove persistent — only manual logout clears it
+  document.getElementById('loginPwd').value = '';
+  document.getElementById('loginError').textContent = '';
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+
+function togglePwdVisibility() {
+  const input  = document.getElementById('loginPwd');
+  const toggle = document.getElementById('loginToggle');
+  if (input.type === 'password') { input.type = 'text';     toggle.textContent = '🙈'; }
+  else                           { input.type = 'password'; toggle.textContent = '👁'; }
+}
+
+function changePassword() {
+  const oldPwd  = document.getElementById('cpOld').value;
+  const newPwd  = document.getElementById('cpNew').value;
+  const confirm = document.getElementById('cpConfirm').value;
+  const err     = document.getElementById('cpError');
+  if (oldPwd !== getStoredPwd())  { err.textContent = 'Password attuale errata.'; return; }
+  if (newPwd.length < 6)          { err.textContent = 'La nuova password deve avere almeno 6 caratteri.'; return; }
+  if (newPwd !== confirm)         { err.textContent = 'Le password non coincidono.'; return; }
+  appStorage.setItem(PWD_KEY, newPwd);
+  // If persistent session active, keep it
+  err.textContent = '';
+  ['cpOld','cpNew','cpConfirm'].forEach(i => document.getElementById(i).value = '');
+  closeOv('ovChangePwd');
+  alert('✓ Password cambiata con successo.');
+}
+
+// ── AUTO REFRESH ogni ora ─────────────────────────────────────────────────
+setInterval(()=>{render();updateHeader();},3600000);
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+updateHeader();
+if (checkSession()) {
+  document.getElementById('loginScreen').style.display = 'none';
+}
+render();
+</script>
+</body>
+</html>
