@@ -997,7 +997,13 @@ function printInventory(group) {
   const timeStr    = new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
   const groupLabel = group==='CRA'?'CRA':group==='CD'?'Centro Diurno':'Tutti i gruppi';
 
-  const dateField  = `<span class="date-field">__ / __ / ____</span>`;
+  const dateField  = `<span class="date-field" aria-label="data">
+    <span class="date-box date-day"></span>
+    <span class="date-sep">/</span>
+    <span class="date-box date-month"></span>
+    <span class="date-sep">/</span>
+    <span class="date-box date-year"></span>
+  </span>`;
 
   let alertRows = '', stockRows = '';
   let totUrgent = 0, totWarn = 0, totLow = 0;
@@ -1104,8 +1110,13 @@ function printInventory(group) {
     color:#333; border-bottom:2px solid #AAB7B8;
   }
   th.th-wf {
-    background:#FEF9EC; color:#7D6608; border-bottom:2px solid #F0B429;
+    background:#F3D36B;
+    color:#111;
+    border:2px solid #8A6D00;
+    border-bottom:3px solid #111;
     text-align:center;
+    font-size:0.74rem;
+    letter-spacing:.05em;
   }
   td { padding:5px 9px; border-bottom:1px solid #E8EAED; vertical-align:middle; }
   .pt-name  { font-weight:800; font-size:0.82rem; color:#111; white-space:nowrap; border-right:2px solid #D5D8DC; min-width:100px; }
@@ -1113,8 +1124,41 @@ function printInventory(group) {
   .pt-drug  { font-size:0.8rem; color:#222; }
   .pt-stock { font-family:monospace; font-size:0.75rem; color:#444; white-space:nowrap; font-weight:600; }
   .pt-boxes { font-family:monospace; font-size:0.72rem; color:#666; white-space:nowrap; }
-  .pt-wf    { text-align:center; min-width:100px; }
-  .date-field { font-family:monospace; font-size:0.78rem; color:#AAB7B8; letter-spacing:.04em; }
+  .pt-wf {
+    text-align:center;
+    min-width:128px;
+    padding:10px 9px;
+    background:#fff;
+    border-left:1.5px solid #B7950B;
+    border-bottom:1.5px solid #D5D8DC;
+  }
+  .date-field {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:5px;
+    width:100%;
+    font-family:monospace;
+    font-size:0.82rem;
+    font-weight:900;
+    color:#111;
+    white-space:nowrap;
+  }
+  .date-box {
+    display:inline-block;
+    height:22px;
+    border:2.2px solid #111;
+    border-radius:2px;
+    background:#fff;
+  }
+  .date-day,
+  .date-month { width:30px; }
+  .date-year  { width:52px; }
+  .date-sep {
+    font-weight:900;
+    color:#111;
+    line-height:22px;
+  }
   .pt-sep td { padding:2px 0; border-bottom:2px solid #EBF5FB; }
   .dot   { font-weight:900; margin-right:3px; }
   .dot-r { color:#C0392B; }
