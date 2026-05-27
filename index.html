@@ -962,15 +962,202 @@ function printInventory(group) {
   const filtered = group && group!=='all' ? patients.filter(p=>(p.group||'CRA')===group) : patients;
   if (!filtered.length) { alert('Nessun paziente da stampare.'); return; }
 
-  const dateStr   = new Date().toLocaleDateString('it-IT', {day:'2-digit', month:'long', year:'numeric'});
-  const timeStr   = new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+  const dateStr    = new Date().toLocaleDateString('it-IT', {day:'2-digit', month:'long', year:'numeric'});
+  const timeStr    = new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
   const groupLabel = group==='CRA'?'CRA':group==='CD'?'Centro Diurno':'Tutti i gruppi';
 
-  // Separate: alert rows (need ricetta) and ok rows
-  let alertRows = '';
-  let okRows    = '';
+  const dateField  = `<span class="date-field">__ / __ / ____</span>`;
+
+  let alertRows = '', stockRows = '';
   let totUrgent = 0, totWarn = 0, totLow = 0;
-  const dateField = `<span style="font-family:monospace;font-size:10px;color:#bbb;letter-spacing:.05em">__ / __ / ____</span>`;
+
+  const sorted = [...filtered].sort((a,b) => a.name.localeCompare(b.name));
+
+  sorted.forEach(p => {
+    if (!p.drugs.length) return;
+
+    // ── SEZIONE 1: farmaci in alert ──
+    const alertDrugs = p.drugs.filter(d => ['urgent','warn','low'].includes(computeDrug(d).status));
+    alertDrugs.forEach((drug, idx) => {
+      const c = computeDrug(drug);
+      const s = c.status;
+      if (s==='urgent') totUrgent++;
+      else if (s==='warn') totWarn++;
+      else if (s==='low')  totLow++;
+      const cpTxt   = s==='urgent' ? '0 cp' : `${Math.round(c.cp)} cp`;
+      const daysTxt = s==='urgent' ? '0 gg'  : isFinite(c.daysLeft) ? `${c.daysLeft} gg` : '—';
+      const dot     = s==='urgent' ? '<span class="dot dot-r">●</span>'
+                    : s==='warn'   ? '<span class="dot dot-a">●</span>'
+                    :                '<span class="dot dot-o">●</span>';
+      const rowBg   = s==='urgent' ? '#fff0f0' : s==='warn' ? '#fff8f0' : '#fffbf5';
+      const nameCell = idx===0
+        ? `<td class="pt-name" rowspan="${alertDrugs.length}">${p.name}${p.code?`<br><span class="pt-code">${p.code}</span>`:''}</td>`
+        : '';
+      alertRows += `<tr style="background:${rowBg}">
+        ${nameCell}
+        <td class="pt-drug">${dot} ${drug.name}</td>
+        <td class="pt-stock">${cpTxt} · ${daysTxt}</td>
+        <td class="pt-wf">${dateField}</td>
+        <td class="pt-wf">${dateField}</td>
+        <td class="pt-wf">${dateField}</td>
+      </tr>`;
+    });
+    if (alertDrugs.length) alertRows += `<tr class="pt-sep"><td colspan="6"></td></tr>`;
+
+    // ── SEZIONE 2: tutti i farmaci ──
+    p.drugs.forEach((drug, idx) => {
+      const c = computeDrug(drug);
+      const s = c.status;
+      const cpTxt   = s==='urgent' ? '0 cp' : `${Math.round(c.cp)} cp`;
+      const daysTxt = s==='urgent' ? '0 gg'  : isFinite(c.daysLeft) ? `${c.daysLeft} gg` : '—';
+      const boxTxt  = s==='urgent' ? 'Esaurito' : c.boxes===0 ? `Ult. conf. [${c.partial}cp]` : `${c.boxes} conf.${c.hasOpen?` +[${c.partial}cp]`:''}`;
+      const dot     = s==='urgent' ? '<span class="dot dot-r">●</span>'
+                    : s==='warn'   ? '<span class="dot dot-a">●</span>'
+                    : s==='low'    ? '<span class="dot dot-o">●</span>'
+                    :                '<span class="dot dot-g">●</span>';
+      const nameCell = idx===0
+        ? `<td class="pt-name" rowspan="${p.drugs.length}">${p.name}${p.code?`<br><span class="pt-code">${p.code}</span>`:''}</td>`
+        : '';
+      stockRows += `<tr>
+        ${nameCell}
+        <td class="pt-drug">${dot} ${drug.name}</td>
+        <td class="pt-stock">${cpTxt} · ${daysTxt}</td>
+        <td class="pt-boxes">${boxTxt}</td>
+      </tr>`;
+    });
+    stockRows += `<tr class="pt-sep"><td colspan="4"></td></tr>`;
+  });
+
+  const needRicetta  = totUrgent + totWarn + totLow;
+  const summaryColor = totUrgent>0 ? '#C0392B' : totWarn>0 ? '#D35400' : totLow>0 ? '#D35400' : '#1E8449';
+  const summaryTxt   = needRicetta > 0
+    ? `${needRicetta} farmaci richiedono ricetta  ·  ${totUrgent} esauriti  ·  ${totWarn} ultima conf.  ·  ${totLow} ≤10 giorni`
+    : '✓ Tutte le scorte nella norma';
+
+  const html = `<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8">
+<title>Inventario Terapie — ${dateStr}</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px; color:#111; padding:22px 26px; }
+
+  /* toolbar — nascosta in stampa */
+  .toolbar-inv { display:flex; gap:10px; margin-bottom:22px; }
+  .toolbar-inv button { padding:10px 22px; border-radius:8px; border:none; cursor:pointer; font-size:13px; font-weight:700; }
+  .btn-print { background:#E8B84B; color:#111; }
+  .btn-close { background:#eee; color:#333; }
+
+  /* intestazione documento */
+  .inv-header { display:flex; justify-content:space-between; align-items:flex-end; border-bottom:3px solid #111; padding-bottom:10px; margin-bottom:14px; }
+  .inv-title { font-size:1.5rem; font-weight:900; letter-spacing:-.5px; color:#111; }
+  .inv-sub   { font-size:0.78rem; color:#555; margin-top:4px; }
+  .inv-date  { font-size:0.72rem; color:#666; text-align:right; line-height:1.8; }
+
+  /* riepilogo stato */
+  .summary { display:inline-block; margin-bottom:20px; padding:6px 16px; border-radius:4px; font-size:0.78rem; font-weight:700; background:${summaryColor}; color:#fff; }
+
+  /* titoli sezione */
+  .section-title {
+    font-size:0.72rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase;
+    color:#fff; padding:6px 12px; margin:22px 0 0;
+    display:flex; align-items:center; gap:8px;
+  }
+  .section-title.alert-hdr { background:#C0392B; }
+  .section-title.stock-hdr { background:#1A5276; }
+
+  /* tabelle */
+  table { width:100%; border-collapse:collapse; }
+  thead tr { background:#F2F3F4; }
+  th {
+    padding:7px 9px; text-align:left;
+    font-size:0.68rem; font-weight:900; letter-spacing:.08em; text-transform:uppercase;
+    color:#333; border-bottom:2px solid #AAB7B8;
+  }
+  th.th-wf {
+    background:#FEF9EC; color:#7D6608; border-bottom:2px solid #F0B429;
+    text-align:center;
+  }
+  td { padding:5px 9px; border-bottom:1px solid #E8EAED; vertical-align:middle; }
+  .pt-name  { font-weight:800; font-size:0.82rem; color:#111; white-space:nowrap; border-right:2px solid #D5D8DC; min-width:100px; }
+  .pt-code  { font-family:monospace; font-size:0.62rem; color:#999; font-weight:400; }
+  .pt-drug  { font-size:0.8rem; color:#222; }
+  .pt-stock { font-family:monospace; font-size:0.75rem; color:#444; white-space:nowrap; font-weight:600; }
+  .pt-boxes { font-family:monospace; font-size:0.72rem; color:#666; white-space:nowrap; }
+  .pt-wf    { text-align:center; min-width:100px; }
+  .date-field { font-family:monospace; font-size:0.78rem; color:#AAB7B8; letter-spacing:.04em; }
+  .pt-sep td { padding:2px 0; border-bottom:2px solid #EBF5FB; }
+  .dot   { font-weight:900; margin-right:3px; }
+  .dot-r { color:#C0392B; }
+  .dot-a { color:#D35400; }
+  .dot-o { color:#D4AC0D; }
+  .dot-g { color:#1E8449; }
+
+  /* legenda */
+  .legend { margin-top:18px; display:flex; gap:16px; font-size:0.68rem; color:#666; flex-wrap:wrap; border-top:1px solid #eee; padding-top:10px; }
+  .legend span { display:flex; align-items:center; gap:4px; }
+
+  @media print {
+    .toolbar-inv { display:none !important; }
+    body { padding:8px 12px; }
+    @page { margin:.7cm; size:A4 landscape; }
+    .section-title { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .summary { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    th.th-wf { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+</style></head><body>
+
+<div class="toolbar-inv">
+  <button class="btn-print" onclick="window.print()">🖨️ Stampa / Salva PDF</button>
+  <button class="btn-close" onclick="window.close()">✕ Chiudi</button>
+</div>
+
+<div class="inv-header">
+  <div>
+    <div class="inv-title">Inventario Terapie · ${groupLabel}</div>
+    <div class="inv-sub">RicettaManager · ${sorted.length} pazienti · ${sorted.reduce((a,p)=>a+p.drugs.length,0)} farmaci totali</div>
+  </div>
+  <div class="inv-date"><strong>Generato il ${dateStr}</strong><br>alle ${timeStr}</div>
+</div>
+
+<div class="summary">${summaryTxt}</div>
+
+${needRicetta > 0 ? `
+<div class="section-title alert-hdr">⚠&nbsp; Farmaci che richiedono ricetta &nbsp;·&nbsp; ${needRicetta} farmaci</div>
+<table>
+  <thead><tr>
+    <th style="width:14%">Paziente</th>
+    <th style="width:22%">Farmaco</th>
+    <th style="width:12%">Scorta</th>
+    <th class="th-wf" style="width:17%">Ricetta richiesta</th>
+    <th class="th-wf" style="width:17%">Ricetta prodotta</th>
+    <th class="th-wf" style="width:18%">Farmaco consegnato</th>
+  </tr></thead>
+  <tbody>${alertRows}</tbody>
+</table>` : ''}
+
+<div class="section-title stock-hdr">📋&nbsp; Scorte farmaci &nbsp;·&nbsp; tutti i pazienti</div>
+<table>
+  <thead><tr>
+    <th style="width:18%">Paziente</th>
+    <th style="width:34%">Farmaco</th>
+    <th style="width:24%">Scorta</th>
+    <th style="width:24%">Confezioni</th>
+  </tr></thead>
+  <tbody>${stockRows}</tbody>
+</table>
+
+<div class="legend">
+  <span><span class="dot dot-g">●</span> Scorta OK</span>
+  <span><span class="dot dot-o">●</span> ≤10 giorni</span>
+  <span><span class="dot dot-a">●</span> Ultima confezione</span>
+  <span><span class="dot dot-r">●</span> Esaurito</span>
+</div>
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=1100,height=750');
+  win.document.write(html);
+  win.document.close();
+  win.onload = () => { win.focus(); };
+}
 
   const sorted = [...filtered].sort((a,b) => a.name.localeCompare(b.name));
 
