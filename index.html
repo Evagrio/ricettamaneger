@@ -439,6 +439,7 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
   <strong style="font-size:1.1rem;">RicettaManager — Inventario terapie</strong>
   <span style="float:right;font-size:0.75rem;color:#888;" id="printDate"></span>
 </div>
+<div class="overlay" id="ovSearch">
   <div class="modal">
     <h3>Cerca paziente</h3>
     <input class="fi" id="sQ" placeholder="Nome o codice..." oninput="doSearch()">
@@ -454,12 +455,42 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 //   lastSync (ISO date string — date when cpRemaining was last set/saved)
 // On render: cpNow = cpRemaining - daysSinceLastSync * cpDie  (floored to 0)
 
-let patients = JSON.parse(localStorage.getItem('rm3_pts') || '[]');
+function createSafeStorage(type) {
+  try {
+    const store = window[type];
+    const testKey = '__rm3_storage_test__';
+    store.setItem(testKey, '1');
+    store.removeItem(testKey);
+    return store;
+  } catch (err) {
+    const data = {};
+    return {
+      getItem: key => Object.prototype.hasOwnProperty.call(data, key) ? data[key] : null,
+      setItem: (key, value) => { data[key] = String(value); },
+      removeItem: key => { delete data[key]; }
+    };
+  }
+}
+
+const appStorage = createSafeStorage('localStorage');
+const tabStorage = createSafeStorage('sessionStorage');
+
+function loadPatients() {
+  try {
+    const parsed = JSON.parse(appStorage.getItem('rm3_pts') || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    appStorage.removeItem('rm3_pts');
+    return [];
+  }
+}
+
+let patients = loadPatients();
 let editPid = null, editDid = null, curPid = null;
 let activeGroup = 'all'; // 'all' | 'CRA' | 'CD'
 
 function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
-function save() { localStorage.setItem('rm3_pts', JSON.stringify(patients)); }
+function save() { appStorage.setItem('rm3_pts', JSON.stringify(patients)); }
 function getP(id) { return patients.find(p=>p.id===id); }
 function today() { return new Date().toISOString().split('T')[0]; }
 
@@ -1164,14 +1195,14 @@ const PWD_KEY      = 'rm3_pwd';
 const SESSION_KEY  = 'rm3_session';
 const DEFAULT_PWD  = 'ricetta2025';
 
-function getStoredPwd() { return localStorage.getItem(PWD_KEY) || DEFAULT_PWD; }
+function getStoredPwd() { return appStorage.getItem(PWD_KEY) || DEFAULT_PWD; }
 
 function checkSession() {
   // If "remember me" token exists and is valid → skip login
-  const token = localStorage.getItem(SESSION_KEY);
+  const token = appStorage.getItem(SESSION_KEY);
   if (token === 'persistent') return true;
   // Session token (tab-level) via sessionStorage
-  if (sessionStorage.getItem(SESSION_KEY) === 'active') return true;
+  if (tabStorage.getItem(SESSION_KEY) === 'active') return true;
   return false;
 }
 
@@ -1180,8 +1211,8 @@ function doLogin() {
   const err   = document.getElementById('loginError');
   const remember = document.getElementById('loginRemember').checked;
   if (pwd === getStoredPwd()) {
-    if (remember) localStorage.setItem(SESSION_KEY, 'persistent');
-    else sessionStorage.setItem(SESSION_KEY, 'active');
+    if (remember) appStorage.setItem(SESSION_KEY, 'persistent');
+    else tabStorage.setItem(SESSION_KEY, 'active');
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('loginPwd').value = '';
     err.textContent = '';
@@ -1194,7 +1225,7 @@ function doLogin() {
 
 function lockApp() {
   if (!confirm('Vuoi bloccare l\'app?')) return;
-  sessionStorage.removeItem(SESSION_KEY);
+  tabStorage.removeItem(SESSION_KEY);
   // Don't remove persistent — only manual logout clears it
   document.getElementById('loginPwd').value = '';
   document.getElementById('loginError').textContent = '';
@@ -1216,7 +1247,7 @@ function changePassword() {
   if (oldPwd !== getStoredPwd())  { err.textContent = 'Password attuale errata.'; return; }
   if (newPwd.length < 6)          { err.textContent = 'La nuova password deve avere almeno 6 caratteri.'; return; }
   if (newPwd !== confirm)         { err.textContent = 'Le password non coincidono.'; return; }
-  localStorage.setItem(PWD_KEY, newPwd);
+  appStorage.setItem(PWD_KEY, newPwd);
   // If persistent session active, keep it
   err.textContent = '';
   ['cpOld','cpNew','cpConfirm'].forEach(i => document.getElementById(i).value = '');
