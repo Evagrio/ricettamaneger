@@ -287,7 +287,8 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
     </label>
     <div class="login-footer">
       Prima volta? La password predefinita è <strong style="color:var(--gold);letter-spacing:.1em">ricetta2025</strong><br>
-      Cambiala dopo il primo accesso dalle impostazioni.
+      Cambiala dopo il primo accesso dalle impostazioni.<br><br>
+      <span style="color:var(--dim);font-size:0.63rem;">Emergenza: digita <strong style="color:var(--gold)">RESET</strong> nel campo password e premi Invio</span>
     </div>
   </div>
 </div>
@@ -1336,6 +1337,20 @@ function doLogin() {
   const pwd   = document.getElementById('loginPwd').value;
   const err   = document.getElementById('loginError');
   const remember = document.getElementById('loginRemember').checked;
+
+  // Emergency reset
+  if (pwd === 'RESET') {
+    if (confirm('Vuoi resettare la password?\n\nLa password tornerà a essere "ricetta2025".\nI dati dei pazienti NON verranno cancellati.')) {
+      localStorage.removeItem(PWD_KEY);
+      localStorage.removeItem(SESSION_KEY);
+      sessionStorage.removeItem(SESSION_KEY);
+      document.getElementById('loginPwd').value = '';
+      err.textContent = '✓ Password resettata. Accedi con "ricetta2025".';
+      err.style.color = 'var(--green)';
+    }
+    return;
+  }
+
   if (pwd === getStoredPwd()) {
     if (remember) localStorage.setItem(SESSION_KEY, 'persistent');
     else sessionStorage.setItem(SESSION_KEY, 'active');
