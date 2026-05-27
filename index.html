@@ -962,118 +962,171 @@ function printInventory(group) {
   const filtered = group && group!=='all' ? patients.filter(p=>(p.group||'CRA')===group) : patients;
   if (!filtered.length) { alert('Nessun paziente da stampare.'); return; }
 
-  const dateStr = new Date().toLocaleDateString('it-IT', {day:'2-digit', month:'long', year:'numeric'});
-  const timeStr = new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+  const dateStr   = new Date().toLocaleDateString('it-IT', {day:'2-digit', month:'long', year:'numeric'});
+  const timeStr   = new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
   const groupLabel = group==='CRA'?'CRA':group==='CD'?'Centro Diurno':'Tutti i gruppi';
 
-  let rows = '';
-  let totUrgent = 0, totWarn = 0;
+  // Separate: alert rows (need ricetta) and ok rows
+  let alertRows = '';
+  let okRows    = '';
+  let totUrgent = 0, totWarn = 0, totLow = 0;
+  const dateField = `<span style="font-family:monospace;font-size:10px;color:#bbb;letter-spacing:.05em">__ / __ / ____</span>`;
+
   const sorted = [...filtered].sort((a,b) => a.name.localeCompare(b.name));
 
   sorted.forEach(p => {
-    if (!p.drugs.length) {
-      rows += `<tr class="pt-row">
-        <td class="pt-name">${p.name}${p.code?` <span class="pt-code">${p.code}</span>`:''}</td>
-        <td colspan="3" style="color:#aaa;font-style:italic;font-size:0.78rem;">Nessun farmaco</td>
-      </tr>`;
-      return;
-    }
-    p.drugs.forEach((drug, idx) => {
-      const c   = computeDrug(drug);
-      const s   = c.status;
+    if (!p.drugs.length) return;
+
+    // Alert drugs for this patient (urgent/warn/low)
+    const alertDrugs = p.drugs.filter(d => ['urgent','warn','low'].includes(computeDrug(d).status));
+    // OK drugs
+    const okDrugs    = p.drugs.filter(d => computeDrug(d).status === 'ok');
+
+    // Build alert rows for this patient
+    alertDrugs.forEach((drug, idx) => {
+      const c = computeDrug(drug);
+      const s = c.status;
       if (s==='urgent') totUrgent++;
       else if (s==='warn') totWarn++;
+      else if (s==='low')  totLow++;
 
-      const cpTxt   = s==='urgent' ? '0 cp' : `${Math.round(c.cp)} cp`;
-      const daysTxt = s==='urgent' ? '0 gg' : isFinite(c.daysLeft) ? `${c.daysLeft} gg` : '—';
-      const boxTxt  = s==='urgent' ? 'Esaurito' : c.boxes===0 ? `Ultima conf. [${c.partial}cp]` : `${c.boxes} conf.${c.hasOpen?` + [${c.partial}cp]`:''}`;
-
-      const statusDot = s==='urgent'
-        ? '<span style="color:#e05252;font-weight:700;">●</span>'
-        : s==='warn'
-        ? '<span style="color:#e8913a;font-weight:700;">●</span>'
-        : '<span style="color:#4db87a;">●</span>';
-
-      const rowClass = s==='urgent' ? 'row-urgent' : s==='warn' ? 'row-warn' : '';
+      const cpTxt  = s==='urgent' ? '0 cp' : `${Math.round(c.cp)} cp`;
+      const daysTxt= s==='urgent' ? '0 gg' : isFinite(c.daysLeft) ? `${c.daysLeft} gg` : '—';
+      const boxTxt = s==='urgent' ? 'Esaurito' : c.boxes===0 ? `Ult. conf. [${c.partial}cp]` : `${c.boxes} conf.${c.hasOpen?` +[${c.partial}cp]`:''}`;
+      const dot    = s==='urgent' ? '<span style="color:#e05252;font-weight:700">●</span>'
+                   : s==='warn'   ? '<span style="color:#e8913a;font-weight:700">●</span>'
+                   :                '<span style="color:#d35400;font-weight:700">●</span>';
+      const rowBg  = s==='urgent' ? '#fff5f5' : s==='warn' ? '#fffaf5' : '#fff8f2';
       const nameCell = idx===0
-        ? `<td class="pt-name" rowspan="${p.drugs.length}">${p.name}${p.code?` <span class="pt-code">${p.code}</span>`:''}</td>`
+        ? `<td class="pt-name" rowspan="${alertDrugs.length}" style="border-right:2px solid #e0e0e0">${p.name}${p.code?` <span class="pt-code">${p.code}</span>`:''}</td>`
         : '';
 
-      rows += `<tr class="${rowClass}">
+      alertRows += `<tr style="background:${rowBg}">
         ${nameCell}
-        <td class="pt-drug">${statusDot} ${drug.name}</td>
+        <td class="pt-drug">${dot} ${drug.name}</td>
+        <td class="pt-stock">${cpTxt} · ${daysTxt}</td>
+        <td class="pt-boxes">${boxTxt}</td>
+        <td class="pt-date">${dateField}</td>
+        <td class="pt-date">${dateField}</td>
+        <td class="pt-date">${dateField}</td>
+      </tr>`;
+    });
+    if (alertDrugs.length) alertRows += `<tr class="pt-sep"><td colspan="7"></td></tr>`;
+
+    // Build ok rows
+    okDrugs.forEach((drug, idx) => {
+      const c = computeDrug(drug);
+      const cpTxt  = `${Math.round(c.cp)} cp`;
+      const daysTxt= isFinite(c.daysLeft) ? `${c.daysLeft} gg` : '—';
+      const boxTxt = c.boxes===0 ? `Ult. conf. [${c.partial}cp]` : `${c.boxes} conf.${c.hasOpen?` +[${c.partial}cp]`:''}`;
+      const nameCell = idx===0
+        ? `<td class="pt-name" rowspan="${okDrugs.length}" style="border-right:2px solid #e0e0e0">${p.name}${p.code?` <span class="pt-code">${p.code}</span>`:''}</td>`
+        : '';
+      okRows += `<tr>
+        ${nameCell}
+        <td class="pt-drug"><span style="color:#4db87a;font-weight:700">●</span> ${drug.name}</td>
         <td class="pt-stock">${cpTxt} · ${daysTxt}</td>
         <td class="pt-boxes">${boxTxt}</td>
       </tr>`;
     });
-    // Separator after each patient
-    rows += `<tr class="pt-sep"><td colspan="4"></td></tr>`;
+    if (okDrugs.length) okRows += `<tr class="pt-sep"><td colspan="4"></td></tr>`;
   });
 
-  const summaryColor = totUrgent>0 ? '#e05252' : totWarn>0 ? '#e8913a' : '#4db87a';
-  const summaryTxt   = totUrgent>0
-    ? `⚠ ${totUrgent} farmaci esauriti · ${totWarn} all'ultima confezione`
-    : totWarn>0
-    ? `📦 ${totWarn} farmaci all'ultima confezione`
+  const summaryColor = totUrgent>0 ? '#e05252' : totWarn>0 ? '#e8913a' : totLow>0 ? '#d35400' : '#4db87a';
+  const needRicetta  = totUrgent + totWarn + totLow;
+  const summaryTxt   = needRicetta > 0
+    ? `${needRicetta} farmaci richiedono ricetta · ${totUrgent} esauriti · ${totWarn} ultima conf. · ${totLow} ≤10gg`
     : '✓ Tutte le scorte nella norma';
 
   const html = `<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8">
 <title>Inventario Terapie — ${dateStr}</title>
 <style>
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size:11px; color:#111; padding:24px 28px; }
+  body { font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px; color:#111; padding:24px 28px; }
+  .toolbar-inv { display:flex; gap:10px; margin-bottom:20px; }
+  .toolbar-inv button { padding:9px 20px; border-radius:8px; border:none; cursor:pointer; font-family:'Helvetica Neue',Arial,sans-serif; font-size:13px; font-weight:700; }
+  .btn-print { background:#E8B84B; color:#111; }
+  .btn-print:hover { filter:brightness(1.1); }
+  .btn-close { background:#eee; color:#333; }
+  .btn-close:hover { background:#ddd; }
   .inv-header { display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #111; padding-bottom:8px; margin-bottom:14px; }
-  .inv-title { font-size:1.3rem; font-weight:700; letter-spacing:-0.3px; }
+  .inv-title { font-size:1.3rem; font-weight:700; }
   .inv-sub { font-size:0.75rem; color:#555; margin-top:3px; }
   .inv-date { font-size:0.72rem; color:#555; text-align:right; line-height:1.6; }
-  .summary { display:inline-block; margin-bottom:14px; padding:5px 12px; border-radius:20px; font-size:0.75rem; font-weight:600; border:1.5px solid ${summaryColor}; color:${summaryColor}; }
-  table { width:100%; border-collapse:collapse; }
-  thead tr { background:#f0f0f0; }
-  th { padding:6px 8px; text-align:left; font-size:0.7rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#555; border-bottom:1.5px solid #ccc; }
+  .summary { display:inline-block; margin-bottom:18px; padding:5px 14px; border-radius:20px; font-size:0.75rem; font-weight:600; border:1.5px solid ${summaryColor}; color:${summaryColor}; }
+  .section-title { font-size:0.72rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#888; margin:18px 0 8px; padding-bottom:4px; border-bottom:1px solid #ddd; }
+  table { width:100%; border-collapse:collapse; margin-bottom:4px; }
+  thead tr { background:#f5f5f5; }
+  th { padding:6px 8px; text-align:left; font-size:0.68rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#666; border-bottom:1.5px solid #ccc; }
+  th.th-ricetta { background:#FEF9EC; color:#B8860B; border-bottom:1.5px solid #E8B84B; }
   td { padding:5px 8px; border-bottom:1px solid #eee; vertical-align:middle; }
-  .pt-name { font-weight:700; font-size:0.88rem; color:#111; white-space:nowrap; border-right:2px solid #e0e0e0; }
-  .pt-code { font-family:monospace; font-size:0.68rem; color:#888; margin-left:5px; }
-  .pt-drug  { font-size:0.82rem; color:#222; }
-  .pt-stock { font-family:monospace; font-size:0.78rem; color:#333; white-space:nowrap; }
-  .pt-boxes { font-family:monospace; font-size:0.75rem; color:#555; white-space:nowrap; }
-  .row-urgent td { background:#fff5f5; }
-  .row-warn   td { background:#fffaf5; }
-  .pt-sep td { padding:3px 0; border-bottom:2px solid #e8e8e8; }
-  .legend { margin-top:16px; display:flex; gap:16px; font-size:0.7rem; color:#555; }
+  .pt-name { font-weight:700; font-size:0.85rem; color:#111; white-space:nowrap; min-width:110px; }
+  .pt-code { font-family:monospace; font-size:0.65rem; color:#888; margin-left:4px; }
+  .pt-drug  { font-size:0.8rem; color:#222; }
+  .pt-stock { font-family:monospace; font-size:0.75rem; color:#333; white-space:nowrap; }
+  .pt-boxes { font-family:monospace; font-size:0.72rem; color:#555; white-space:nowrap; }
+  .pt-date  { font-size:0.7rem; color:#aaa; white-space:nowrap; min-width:88px; }
+  .pt-sep td { padding:2px 0; border-bottom:2px solid #ebebeb; }
+  .legend { margin-top:16px; display:flex; gap:14px; font-size:0.68rem; color:#666; flex-wrap:wrap; }
   .legend span { display:flex; align-items:center; gap:4px; }
   @media print {
-    body { padding:12px 16px; }
-    @page { margin:1cm; }
+    .toolbar-inv { display:none !important; }
+    body { padding:10px 14px; }
+    @page { margin:.8cm; size:A4 landscape; }
   }
 </style></head><body>
+<div class="toolbar-inv">
+  <button class="btn-print" onclick="window.print()">🖨️ Stampa / Salva PDF</button>
+  <button class="btn-close" onclick="window.close()">✕ Chiudi</button>
+</div>
 <div class="inv-header">
   <div>
     <div class="inv-title">Inventario Terapie · ${groupLabel}</div>
-    <div class="inv-sub">RicettaManager · ${sorted.length} pazient${sorted.length===1?'e':'i'} · ${sorted.reduce((a,p)=>a+p.drugs.length,0)} farmaci</div>
+    <div class="inv-sub">RicettaManager · ${sorted.length} pazienti · ${sorted.reduce((a,p)=>a+p.drugs.length,0)} farmaci</div>
   </div>
   <div class="inv-date">Generato il ${dateStr}<br>alle ${timeStr}</div>
 </div>
 <div class="summary">${summaryTxt}</div>
+
+${needRicetta > 0 ? `
+<div class="section-title">⚠ Farmaci che richiedono ricetta</div>
 <table>
   <thead><tr>
-    <th style="width:28%">Paziente</th>
-    <th style="width:30%">Farmaco</th>
+    <th style="width:15%">Paziente</th>
+    <th style="width:20%">Farmaco</th>
+    <th style="width:10%">Scorta</th>
+    <th style="width:13%">Confezioni</th>
+    <th class="th-ricetta" style="width:14%">Ricetta richiesta</th>
+    <th class="th-ricetta" style="width:14%">Ricetta prodotta</th>
+    <th class="th-ricetta" style="width:14%">Farmaco consegnato</th>
+  </tr></thead>
+  <tbody>${alertRows}</tbody>
+</table>` : ''}
+
+${okRows ? `
+<div class="section-title">✓ Farmaci con scorte sufficienti</div>
+<table>
+  <thead><tr>
+    <th style="width:22%">Paziente</th>
+    <th style="width:36%">Farmaco</th>
     <th style="width:20%">Scorta</th>
     <th style="width:22%">Confezioni</th>
   </tr></thead>
-  <tbody>${rows}</tbody>
-</table>
+  <tbody>${okRows}</tbody>
+</table>` : ''}
+
 <div class="legend">
-  <span><span style="color:#4db87a;font-weight:700;">●</span> Scorta OK</span>
-  <span><span style="color:#e8913a;font-weight:700;">●</span> Ultima confezione</span>
-  <span><span style="color:#e05252;font-weight:700;">●</span> Esaurito</span>
+  <span><span style="color:#4db87a;font-weight:700">●</span> Scorta OK</span>
+  <span><span style="color:#d35400;font-weight:700">●</span> ≤10 giorni</span>
+  <span><span style="color:#e8913a;font-weight:700">●</span> Ultima confezione</span>
+  <span><span style="color:#e05252;font-weight:700">●</span> Esaurito</span>
 </div>
 </body></html>`;
 
-  const win = window.open('', '_blank', 'width=800,height=600');
+  const win = window.open('', '_blank', 'width=1000,height=700');
   win.document.write(html);
   win.document.close();
-  win.onload = () => { win.focus(); win.print(); };
+  win.onload = () => { win.focus(); };
 }
 
 // ── AUTH ──────────────────────────────────────────────────────────────────
