@@ -1,0 +1,16 @@
+function doLogin() {
+  const pwd   = document.getElementById('loginPwd').value;
+  const err   = document.getElementById('loginError');
+  const remember = document.getElementById('loginRemember').checked;
+  if (pwd === getStoredPwd()) {
+    if (remember) localStorage.setItem(SESSION_KEY, 'persistent');
+    else sessionStorage.setItem(SESSION_KEY, 'active');
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('loginPwd').value = '';
+    err.textContent = '';
+  } else {
+    err.textContent = 'Password errata. Riprova.';
+    document.getElementById('loginPwd').value = '';
+    document.getElementById('loginPwd').focus();
+  }
+}
