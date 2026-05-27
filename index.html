@@ -1401,9 +1401,7 @@ setInterval(()=>{render();updateHeader();},3600000);
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 updateHeader();
-if (checkSession()) {
-  document.getElementById('loginScreen').style.display = 'none';
-}
+document.getElementById('loginScreen').style.display = 'none';
 render();
 </script>
 </body>
