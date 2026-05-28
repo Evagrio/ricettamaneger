@@ -449,7 +449,7 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
     <div id="orderRows"></div>
     <div class="mfooter">
       <button class="btn btn-ghost" onclick="printOrderList()">🖨️ Stampa</button>
-      <button class="btn btn-gold" onclick="exportOrderEditable()">⬇ File editabile</button>
+      <button class="btn btn-gold" onclick="exportOrderEditable()">⬇ File Word</button>
       <button class="btn btn-ghost" onclick="closeOv('ovOrderList')">Chiudi</button>
     </div>
   </div>
@@ -712,41 +712,102 @@ function buildInventoryRows(group) {
   );
 }
 
-function buildInventoryCsv(group) {
-  const header = ['Paziente','Codice','Gruppo','Farmaco','Compresse die','Compresse per confezione','Compresse rimaste','Giorni terapia','Confezioni intere','Compresse confezione aperta','Stato'];
-  const lines = [header.map(csvCell).join(';')];
-  buildInventoryRows(group).forEach(({patient, drug, calc}) => {
-    lines.push([
-      patient.name, patient.code || '', patient.group || 'CRA', drug.name, drug.cpDie, drug.cpBox,
-      Math.round(calc.cp), isFinite(calc.daysLeft) ? calc.daysLeft : '', calc.boxes, calc.hasOpen ? calc.partial : 0, orderStatusLabel(calc.status)
-    ].map(csvCell).join(';'));
-  });
-  return lines.join('\n');
+function wordDocShell(title, body, orientation = 'Portrait') {
+  return `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="UTF-8">
+<title>${esc(title)}</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>90</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->
+<style>
+  @page WordSection1 { size: 29.7cm 21cm; margin: 1.2cm; mso-page-orientation:${orientation.toLowerCase()}; }
+  div.WordSection1 { page: WordSection1; }
+  body { font-family: Arial, sans-serif; color:#111; }
+  h1 { font-size:20pt; margin:0 0 4pt; }
+  .meta { font-size:9pt; color:#555; margin-bottom:12pt; }
+  .summary { font-size:10pt; font-weight:bold; margin:8pt 0 12pt; padding:6pt; background:#eeeeee; }
+  table { width:100%; border-collapse:collapse; font-size:9pt; }
+  th { background:#d9eaf7; font-weight:bold; text-align:left; border:1px solid #777; padding:5pt; }
+  td { border:1px solid #999; padding:5pt; vertical-align:top; }
+  .muted { color:#666; font-size:8pt; }
+  .write { height:22pt; }
+</style>
+</head>
+<body><div class="WordSection1">${body}</div></body>
+</html>`;
+}
+
+function buildInventoryWordHtml(group = activeGroup) {
+  const rows = buildInventoryRows(group);
+  const dateStr = new Date().toLocaleDateString('it-IT', {day:'2-digit', month:'long', year:'numeric'});
+  const timeStr = new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+  const groupLabel = group === 'CRA' ? 'CRA' : group === 'CD' ? 'Centro Diurno' : 'Tutti i gruppi';
+  const bodyRows = rows.map(({patient, drug, calc}) => {
+    const cpTxt = calc.status === 'urgent' ? '0 cp' : `${Math.round(calc.cp)} cp`;
+    const daysTxt = calc.status === 'urgent' ? '0 gg' : isFinite(calc.daysLeft) ? `${calc.daysLeft} gg` : '—';
+    const boxTxt = calc.status === 'urgent' ? 'Esaurito' : calc.boxes === 0 ? `Ult. conf. [${calc.partial}cp]` : `${calc.boxes} conf.${calc.hasOpen ? ` +[${calc.partial}cp]` : ''}`;
+    return `<tr>
+      <td><strong>${esc(patient.name)}</strong>${patient.code ? `<br><span class="muted">${esc(patient.code)}</span>` : ''}</td>
+      <td>${esc(drug.name)}</td>
+      <td>${cpTxt}<br><span class="muted">${daysTxt}</span></td>
+      <td>${boxTxt}</td>
+      <td>${esc(orderStatusLabel(calc.status))}</td>
+    </tr>`;
+  }).join('');
+  const body = `
+    <h1>Inventario farmaci personali · ${esc(groupLabel)}</h1>
+    <div class="meta">Generato il ${esc(dateStr)} alle ${esc(timeStr)} · ${rows.length} farmaci in carico</div>
+    <div class="summary">Elenco completo delle scorte personali, senza separare i farmaci in esaurimento.</div>
+    <table>
+      <thead><tr><th>Paziente</th><th>Farmaco</th><th>Scorta</th><th>Confezioni</th><th>Stato</th></tr></thead>
+      <tbody>${bodyRows}</tbody>
+    </table>`;
+  return wordDocShell('Inventario farmaci personali', body, 'Portrait');
 }
 
 function exportInventoryEditable(group = activeGroup) {
   const rows = buildInventoryRows(group);
   if (!rows.length) { alert('Nessun farmaco da esportare.'); return; }
-  downloadTextFile(`inventario-farmaci-personali-${dateStamp()}.csv`, buildInventoryCsv(group), 'text/csv;charset=utf-8');
+  downloadTextFile(`inventario-farmaci-personali-${dateStamp()}.doc`, buildInventoryWordHtml(group), 'application/msword;charset=utf-8');
 }
 
-function buildOrderCsv(group = activeGroup) {
+function buildOrderWordHtml(group = activeGroup) {
   const items = getOrderItems().filter(({patient}) => group === 'all' || (patient.group || 'CRA') === group);
-  const header = ['Paziente','Codice','Gruppo','Farmaco','Scorta compresse','Giorni terapia','Confezioni intere','Compresse confezione aperta','Stato','Ricetta richiesta','Ricetta prodotta','Farmaco consegnato','Note'];
-  const lines = [header.map(csvCell).join(';')];
-  items.forEach(({patient, drug, calc}) => {
-    lines.push([
-      patient.name, patient.code || '', patient.group || 'CRA', drug.name, Math.round(calc.cp),
-      isFinite(calc.daysLeft) ? calc.daysLeft : '', calc.boxes, calc.hasOpen ? calc.partial : 0, orderStatusLabel(calc.status), '', '', '', ''
-    ].map(csvCell).join(';'));
-  });
-  return lines.join('\n');
+  const dateStr = new Date().toLocaleDateString('it-IT', {day:'2-digit', month:'long', year:'numeric'});
+  const timeStr = new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+  const groupLabel = group === 'CRA' ? 'CRA' : group === 'CD' ? 'Centro Diurno' : 'Tutti i gruppi';
+  const urgent = items.filter(i => i.calc.status === 'urgent').length;
+  const warn = items.filter(i => i.calc.status === 'warn').length;
+  const low = items.filter(i => i.calc.status === 'low').length;
+  const bodyRows = items.map(({patient, drug, calc}) => {
+    const cpTxt = calc.status === 'urgent' ? '0 cp' : `${Math.round(calc.cp)} cp`;
+    const daysTxt = calc.status === 'urgent' ? '0 gg' : isFinite(calc.daysLeft) ? `${calc.daysLeft} gg` : '—';
+    return `<tr>
+      <td><strong>${esc(patient.name)}</strong>${patient.code ? `<br><span class="muted">${esc(patient.code)}</span>` : ''}</td>
+      <td>${esc(drug.name)}</td>
+      <td>${cpTxt}<br><span class="muted">${daysTxt}</span></td>
+      <td>${esc(orderStatusLabel(calc.status))}</td>
+      <td class="write"></td>
+      <td class="write"></td>
+      <td class="write"></td>
+      <td class="write"></td>
+    </tr>`;
+  }).join('');
+  const body = `
+    <h1>Farmaci personali da ordinare · ${esc(groupLabel)}</h1>
+    <div class="meta">Generato il ${esc(dateStr)} alle ${esc(timeStr)} · solo farmaci in esaurimento</div>
+    <div class="summary">${items.length} farmaci da ordinare · ${urgent} esauriti · ${warn} ultima confezione · ${low} entro 10 giorni</div>
+    <table>
+      <thead><tr><th>Paziente</th><th>Farmaco</th><th>Scorta</th><th>Stato</th><th>Ricetta richiesta</th><th>Ricetta prodotta</th><th>Farmaco consegnato</th><th>Note</th></tr></thead>
+      <tbody>${bodyRows}</tbody>
+    </table>`;
+  return wordDocShell('Farmaci personali da ordinare', body, 'Landscape');
 }
 
 function exportOrderEditable(group = activeGroup) {
   const items = getOrderItems().filter(({patient}) => group === 'all' || (patient.group || 'CRA') === group);
   if (!items.length) { alert('Nessun farmaco personale da ordinare.'); return; }
-  downloadTextFile(`farmaci-personali-da-ordinare-${dateStamp()}.csv`, buildOrderCsv(group), 'text/csv;charset=utf-8');
+  downloadTextFile(`farmaci-personali-da-ordinare-${dateStamp()}.doc`, buildOrderWordHtml(group), 'application/msword;charset=utf-8');
 }
 
 function printOrderList(group = activeGroup) {
@@ -812,7 +873,7 @@ function printOrderList(group = activeGroup) {
 </style></head><body>
 <div class="toolbar-inv">
   <button class="btn-print" onclick="window.print()">🖨️ Stampa / Salva PDF</button>
-  <button class="btn-edit" onclick="window.opener.exportOrderEditable('${group}')">⬇ File editabile</button>
+  <button class="btn-edit" onclick="window.opener.exportOrderEditable('${group}')">⬇ File Word</button>
   <button class="btn-close" onclick="window.close()">✕ Chiudi</button>
 </div>
 <div class="inv-header"><div><div class="inv-title">Farmaci personali da ordinare · ${groupLabel}</div><div class="inv-sub">RicettaManager · solo farmaci in esaurimento</div></div><div class="inv-date"><strong>Generato il ${dateStr}</strong><br>alle ${timeStr}</div></div>
@@ -1277,7 +1338,7 @@ function printInventory(group) {
 </style></head><body>
 <div class="toolbar-inv">
   <button class="btn-print" onclick="window.print()">🖨️ Stampa / Salva PDF</button>
-  <button class="btn-edit" onclick="window.opener.exportInventoryEditable('${group}')">⬇ File editabile</button>
+  <button class="btn-edit" onclick="window.opener.exportInventoryEditable('${group}')">⬇ File Word</button>
   <button class="btn-close" onclick="window.close()">✕ Chiudi</button>
 </div>
 <div class="inv-header"><div><div class="inv-title">Inventario farmaci personali · ${groupLabel}</div><div class="inv-sub">RicettaManager · ${filtered.length} pazienti · ${rows.length} farmaci in carico</div></div><div class="inv-date"><strong>Generato il ${dateStr}</strong><br>alle ${timeStr}</div></div>
