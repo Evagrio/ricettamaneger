@@ -95,6 +95,7 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 .sdot.urgent { background:var(--red); animation:pulse 1.2s infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
 .dname { font-size:0.88rem; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dpatient { font-family:'Inconsolata',monospace; font-size:0.64rem; color:var(--gold); margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .ddose { font-family:'Inconsolata',monospace; font-size:0.67rem; color:var(--muted); margin-top:2px; }
 
 .drow-actions { display:flex; gap:3px; flex-shrink:0; }
@@ -140,7 +141,7 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 .add-drug-btn:hover { border-color:var(--gold); color:var(--gold); background:var(--gold-bg); }
 
 /* GROUP FILTER BAR */
-.group-bar { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+.group-bar { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; align-items:center; }
 .gbtn { display:inline-flex; align-items:center; gap:6px; padding:7px 16px; border-radius:20px; border:1.5px solid var(--border-hi); background:var(--surface2); color:var(--muted); font-family:'Nunito',sans-serif; font-size:0.82rem; font-weight:700; cursor:pointer; transition:all .15s; }
 .gBtn-all.active  { background:var(--gold);    border-color:var(--gold);    color:#0F1117; }
 .gBtn-cra.active  { background:#5B8DEF;        border-color:#5B8DEF;        color:#fff; }
@@ -312,11 +313,8 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
   <div class="logo">Ricetta<em>Manager</em></div>
   <div class="hdr-right">
     <div class="clock"><div id="hDate"></div><div id="hAlert" style="color:var(--gold);font-weight:700"></div></div>
-    <button class="btn btn-ghost btn-sm" onclick="openSearch()">🔍 Cerca</button>
-    <button class="btn btn-ghost btn-sm" onclick="openOrderList()">📋 Da ordinare</button>
     <button class="lock-btn" onclick="openOv('ovChangePwd')" title="Cambia password">🔑</button>
     <button class="lock-btn" onclick="lockApp()" title="Blocca app">🔒</button>
-    <button class="btn btn-gold" onclick="openAddPatient()">＋ Paziente</button>
   </div>
 </header>
 
@@ -334,7 +332,7 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
       <p>Farmaci personali · scorte scalate automaticamente · aggiornamento in tempo reale</p>
     </div>
     <div class="tbar-right">
-      <button class="btn btn-ghost btn-sm" onclick="render()">⟳ Aggiorna</button>
+      <button class="btn btn-ghost btn-sm" onclick="openOrderList()">📋 Da ordinare</button>
       <button class="btn btn-ghost btn-sm" onclick="printInventory(activeGroup)" title="Inventario PDF gruppo attivo">📄 Inventario</button>
       <button class="btn btn-ghost btn-sm" onclick="exportData()" title="Esporta backup dati">💾 Esporta</button>
       <button class="btn btn-ghost btn-sm" onclick="document.getElementById('importFile').click()" title="Importa backup dati">📂 Importa</button>
@@ -347,6 +345,8 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
     <button class="gbtn gBtn-all active" id="gbtn-all" onclick="setGroup('all')">👥 Tutti <span id="cnt-all"></span></button>
     <button class="gbtn gBtn-cra" id="gbtn-cra" onclick="setGroup('CRA')">🏠 CRA <span id="cnt-cra"></span></button>
     <button class="gbtn gBtn-cd"  id="gbtn-cd"  onclick="setGroup('CD')">☀️ Centro Diurno <span id="cnt-cd"></span></button>
+    <button class="btn btn-ghost btn-sm" onclick="openSearch()">🔍 Cerca</button>
+    <button class="btn btn-gold btn-sm" onclick="openAddPatient()">＋ Paziente</button>
   </div>
 
   <div class="grid" id="grid"></div>
@@ -396,23 +396,31 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
   <div class="modal">
     <h3 id="drgTitle">Aggiungi farmaco</h3>
     <div class="fg"><label class="fl">Nome farmaco</label><input class="fi" id="dName" placeholder="es. Ramipril 5mg"></div>
+    <div class="fg">
+      <label class="fl">Unità di somministrazione</label>
+      <select class="fsel" id="dUnit" onchange="updateUnitLabels();updatePreview();">
+        <option value="cp">Compresse (cp)</option>
+        <option value="gtt">Gocce (gtt)</option>
+        <option value="puff">Puff (puff)</option>
+      </select>
+    </div>
     <div class="frow">
       <div class="fg">
-        <label class="fl">Compresse / die</label>
+        <label class="fl" id="dCpDieLabel">Quantità / die</label>
         <input class="fi" type="number" id="dCpDie" min="0.25" step="0.25" placeholder="es. 1">
-        <div class="fhint">Frazioni: <strong>0.5</strong> = ½ cp</div>
+        <div class="fhint" id="dDoseHint">Frazioni: <strong>0.5</strong> = ½ cp</div>
       </div>
       <div class="fg">
-        <label class="fl">Cp per confezione</label>
+        <label class="fl" id="dCpBoxLabel">Quantità per confezione</label>
         <input class="fi" type="number" id="dCpBox" min="1" step="1" placeholder="es. 30">
       </div>
     </div>
 
     <!-- SCORTA REALE -->
     <div class="fg">
-      <label class="fl">Scorta attuale — compresse totali</label>
+      <label class="fl" id="dCpTotLabel">Scorta attuale — quantità totale</label>
       <input class="fi" type="number" id="dCpTot" min="0" step="1" placeholder="es. 64  (= 2 conf. da 30 + 4 cp aperte)">
-      <div class="fhint">Conta tutte le compresse: quelle nelle confezioni chiuse <strong>+</strong> quelle nella confezione aperta.</div>
+      <div class="fhint" id="dStockHint">Conta tutte le unità: confezioni chiuse <strong>+</strong> confezione aperta.</div>
     </div>
 
     <div class="preview-box" id="dPreview"></div>
@@ -569,6 +577,27 @@ function computeDrug(drug) {
   return { cp, boxes, partial: Math.round(partial), hasOpen, totalConf, daysLeft, pct, status };
 }
 
+function drugUnit(drug) {
+  return drug.unit || 'cp';
+}
+
+function qtyText(value, drug) {
+  return `${Math.round(value)} ${drugUnit(drug)}`;
+}
+
+function packText(calc, drug) {
+  const unit = drugUnit(drug);
+  if (calc.status === 'urgent') return 'Esaurito';
+  return calc.boxes === 0
+    ? `Ult. conf. [${calc.partial}${unit}]`
+    : `${calc.boxes} conf.${calc.hasOpen ? ` +[${calc.partial}${unit}]` : ''}`;
+}
+
+function doseText(drug) {
+  const unit = drugUnit(drug);
+  return `${drug.cpDie} ${unit}/die · ${drug.cpBox} ${unit}/conf.`;
+}
+
 // ── HEADER ────────────────────────────────────────────────────────────────
 function updateHeader() {
   document.getElementById('hDate').textContent =
@@ -606,22 +635,20 @@ function refreshAlerts() {
   const isUrgent = urgent.length > 0;
   const isWarn   = warn.length > 0;
   inner.className = 'alert-inner ' + (isUrgent ? 'urgent' : 'warn');
+  const allCount = urgent.length + warn.length + low.length;
   document.getElementById('alertTtl').textContent = isUrgent
-    ? `⚠ ${urgent.length} alert urgent${urgent.length>1?'i':'o'}`
+    ? `Alert Urgenti n. ${urgent.length}${warn.length>0?' · Ultima conf. n. '+warn.length:''}${low.length>0?' · ≤10gg n. '+low.length:''}`
     : isWarn
-    ? `📦 ${warn.length} farmac${warn.length>1?'i':'o'} all'ultima confezione`
-    : `⏱ ${low.length} farmac${low.length>1?'i':'o'} in esaurimento (≤10gg)`;
-  document.getElementById('alertChips').innerHTML = [
-    ...urgent.map(l=>`<span class="chip urgent">${esc(l)}</span>`),
-    ...warn.map(l=>`<span class="chip warn">${esc(l)}</span>`),
-    ...low.map(l=>`<span class="chip" style="background:rgba(211,84,0,.15);border:1px solid rgba(211,84,0,.4);color:var(--text)">${esc(l)}</span>`)
-  ].join('');
+    ? `⚠ Ultima confezione n. ${warn.length}${low.length>0?' · ≤10gg n. '+low.length:''}`
+    : `⏱ In esaurimento (≤10gg) n. ${low.length}`;
+  document.getElementById('alertChips').innerHTML = '';
   document.getElementById('hAlert').textContent = `${total} alert attiv${total>1?'i':'o'}`;
 }
 
-function getOrderItems() {
+function getOrderItems(group = 'all') {
   const items = [];
-  patients.forEach(p => {
+  const source = group === 'all' ? patients : patients.filter(p => (p.group || 'CRA') === group);
+  source.forEach(p => {
     (p.drugs || []).forEach(d => {
       const c = computeDrug(d);
       if (!['urgent','warn','low'].includes(c.status)) return;
@@ -643,7 +670,7 @@ function orderStatusLabel(status) {
 }
 
 function openOrderList() {
-  const items = getOrderItems();
+  const items = getOrderItems(activeGroup);
   const summary = document.getElementById('orderSummary');
   const rows = document.getElementById('orderRows');
   if (!items.length) {
@@ -671,7 +698,7 @@ function openOrderList() {
           <tr>
             <td style="padding:9px 8px;border-bottom:1px solid var(--border);font-weight:700;">${esc(patient.name)}</td>
             <td style="padding:9px 8px;border-bottom:1px solid var(--border);">${esc(drug.name)}</td>
-            <td style="padding:9px 8px;border-bottom:1px solid var(--border);font-family:'Inconsolata',monospace;">${Math.round(calc.cp)} cp · ${isFinite(calc.daysLeft) ? calc.daysLeft + ' gg' : '—'}</td>
+            <td style="padding:9px 8px;border-bottom:1px solid var(--border);font-family:'Inconsolata',monospace;">${qtyText(calc.cp, drug)} · ${isFinite(calc.daysLeft) ? calc.daysLeft + ' gg' : '—'}</td>
             <td style="padding:9px 8px;border-bottom:1px solid var(--border);"><span class="badge ${calc.status}">${orderStatusLabel(calc.status)}</span></td>
           </tr>
         `).join('')}
@@ -743,9 +770,9 @@ function buildInventoryWordHtml(group = activeGroup) {
   const timeStr = new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
   const groupLabel = group === 'CRA' ? 'CRA' : group === 'CD' ? 'Centro Diurno' : 'Tutti i gruppi';
   const bodyRows = rows.map(({patient, drug, calc}) => {
-    const cpTxt = calc.status === 'urgent' ? '0 cp' : `${Math.round(calc.cp)} cp`;
+    const cpTxt = calc.status === 'urgent' ? `0 ${drugUnit(drug)}` : qtyText(calc.cp, drug);
     const daysTxt = calc.status === 'urgent' ? '0 gg' : isFinite(calc.daysLeft) ? `${calc.daysLeft} gg` : '—';
-    const boxTxt = calc.status === 'urgent' ? 'Esaurito' : calc.boxes === 0 ? `Ult. conf. [${calc.partial}cp]` : `${calc.boxes} conf.${calc.hasOpen ? ` +[${calc.partial}cp]` : ''}`;
+    const boxTxt = packText(calc, drug);
     return `<tr>
       <td><strong>${esc(patient.name)}</strong>${patient.code ? `<br><span class="muted">${esc(patient.code)}</span>` : ''}</td>
       <td>${esc(drug.name)}</td>
@@ -772,7 +799,7 @@ function exportInventoryEditable(group = activeGroup) {
 }
 
 function buildOrderWordHtml(group = activeGroup) {
-  const items = getOrderItems().filter(({patient}) => group === 'all' || (patient.group || 'CRA') === group);
+  const items = getOrderItems(group);
   const dateStr = new Date().toLocaleDateString('it-IT', {day:'2-digit', month:'long', year:'numeric'});
   const timeStr = new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
   const groupLabel = group === 'CRA' ? 'CRA' : group === 'CD' ? 'Centro Diurno' : 'Tutti i gruppi';
@@ -780,7 +807,7 @@ function buildOrderWordHtml(group = activeGroup) {
   const warn = items.filter(i => i.calc.status === 'warn').length;
   const low = items.filter(i => i.calc.status === 'low').length;
   const bodyRows = items.map(({patient, drug, calc}) => {
-    const cpTxt = calc.status === 'urgent' ? '0 cp' : `${Math.round(calc.cp)} cp`;
+    const cpTxt = calc.status === 'urgent' ? `0 ${drugUnit(drug)}` : qtyText(calc.cp, drug);
     const daysTxt = calc.status === 'urgent' ? '0 gg' : isFinite(calc.daysLeft) ? `${calc.daysLeft} gg` : '—';
     return `<tr>
       <td><strong>${esc(patient.name)}</strong>${patient.code ? `<br><span class="muted">${esc(patient.code)}</span>` : ''}</td>
@@ -805,13 +832,13 @@ function buildOrderWordHtml(group = activeGroup) {
 }
 
 function exportOrderEditable(group = activeGroup) {
-  const items = getOrderItems().filter(({patient}) => group === 'all' || (patient.group || 'CRA') === group);
+  const items = getOrderItems(group);
   if (!items.length) { alert('Nessun farmaco personale da ordinare.'); return; }
   downloadTextFile(`farmaci-personali-da-ordinare-${dateStamp()}.doc`, buildOrderWordHtml(group), 'application/msword;charset=utf-8');
 }
 
 function printOrderList(group = activeGroup) {
-  const items = getOrderItems().filter(({patient}) => group === 'all' || (patient.group || 'CRA') === group);
+  const items = getOrderItems(group);
   if (!items.length) { alert('Nessun farmaco personale da ordinare.'); return; }
 
   const dateStr = new Date().toLocaleDateString('it-IT', {day:'2-digit', month:'long', year:'numeric'});
@@ -823,9 +850,9 @@ function printOrderList(group = activeGroup) {
   const dateField = '<span class="date-field" aria-label="data"></span>';
 
   const rows = items.map(({patient, drug, calc}) => {
-    const cpTxt = calc.status === 'urgent' ? '0 cp' : `${Math.round(calc.cp)} cp`;
+    const cpTxt = calc.status === 'urgent' ? `0 ${drugUnit(drug)}` : qtyText(calc.cp, drug);
     const daysTxt = calc.status === 'urgent' ? '0 gg' : isFinite(calc.daysLeft) ? `${calc.daysLeft} gg` : '—';
-    const boxTxt = calc.status === 'urgent' ? 'Esaurito' : calc.boxes === 0 ? `Ult. conf. [${calc.partial}cp]` : `${calc.boxes} conf.${calc.hasOpen ? ` +[${calc.partial}cp]` : ''}`;
+    const boxTxt = packText(calc, drug);
     const dot = calc.status === 'urgent' ? '<span class="dot dot-r">●</span>' : calc.status === 'warn' ? '<span class="dot dot-a">●</span>' : '<span class="dot dot-o">●</span>';
     const bg = calc.status === 'urgent' ? '#fff0f0' : calc.status === 'warn' ? '#fff8f0' : '#fffbf5';
     return `<tr style="background:${bg}">
@@ -896,7 +923,7 @@ function render(filterIds) {
   if (activeGroup !== 'all') list = list.filter(p=>(p.group||'CRA')===activeGroup);
 
   const score = p => { const ss = p.drugs.map(d=>computeDrug(d).status); return ss.includes('urgent')?0:ss.includes('warn')?1:ss.includes('low')?2:3; };
-  list.sort((a,b)=>score(a)-score(b));
+  list.sort((a,b)=>a.name.localeCompare(b.name,'it'));
   updateGroupCounts();
 
   grid.innerHTML = '';
@@ -928,6 +955,7 @@ function render(filterIds) {
             <div class="drow-left">
               <div class="sdot ${s}"></div>
               <div style="min-width:0">
+                <div class="dpatient">${esc(patient.name)}</div>
                 <div class="dname">${esc(drug.name)}</div>
                 <div class="ddose">${drug.cpDie} cp/die · ${drug.cpBox} cp/conf.</div>
               </div>
