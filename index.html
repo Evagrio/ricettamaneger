@@ -111,8 +111,8 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 .box-partial { position:relative; display:inline-flex; align-items:center; }
 /* progress bar */
 .pbar-wrap { flex:1; }
-.pbar-track { height:4px; background:var(--border); border-radius:2px; overflow:hidden; }
-.pbar-fill { height:100%; border-radius:2px; transition:width .4s; }
+.pbar-track { height:7px; background:var(--border); border-radius:4px; overflow:hidden; }
+.pbar-fill { height:100%; border-radius:4px; transition:width .4s; }
 .pbar-fill.ok     { background:var(--green); }
 .pbar-fill.warn   { background:var(--amber); }
 .pbar-fill.low    { background:var(--orange); }
@@ -318,8 +318,6 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
     <button class="btn btn-ghost btn-sm" onclick="exportData()">💾 Esporta</button>
     <button class="btn btn-ghost btn-sm" onclick="document.getElementById('importFile2').click()">📂 Importa</button>
     <input type="file" id="importFile2" accept=".json" style="display:none" onchange="importData(event)">
-    <button class="lock-btn" onclick="openOv('ovChangePwd')" title="Cambia password">🔑</button>
-    <button class="lock-btn" onclick="lockApp()" title="Blocca app">🔒</button>
   </div>
 </header>
 
@@ -344,7 +342,6 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
     <button class="gbtn gBtn-all active" id="gbtn-all" onclick="setGroup('all')">👥 Tutti <span id="cnt-all"></span></button>
     <button class="gbtn gBtn-cra" id="gbtn-cra" onclick="setGroup('CRA')">🏠 CRA <span id="cnt-cra"></span></button>
     <button class="gbtn gBtn-cd"  id="gbtn-cd"  onclick="setGroup('CD')">☀️ Centro Diurno <span id="cnt-cd"></span></button>
-    <button class="btn btn-ghost btn-sm" onclick="openSearch()">🔍 Cerca</button>
     <button class="btn btn-gold btn-sm" onclick="openAddPatient()">＋ Paziente</button>
   </div>
 
@@ -977,7 +974,11 @@ function render(filterIds) {
             <span class="ctrl-label">Sync: ${drug.lastSync}</span>
           </div>
         </div>`;
-    }).join('') || '<p style="color:var(--dim);font-size:0.8rem;padding:4px 2px">Nessun farmaco</p>';
+    }).join('') || `<div style="text-align:center;padding:20px 12px 8px;">
+      <div style="font-size:2rem;opacity:0.3;margin-bottom:8px;">💊</div>
+      <div style="font-size:0.82rem;color:var(--dim);font-weight:600;">Nessuna terapia registrata</div>
+      <div style="font-size:0.72rem;color:var(--dim);margin-top:4px;">Premi il tasto qui sotto per aggiungere un farmaco</div>
+    </div>`;
 
     const code = `<div class="pmeta">${grpTag}${patient.code?' '+esc(patient.code):''}${patient.dob?' · '+new Date(patient.dob+'T12:00').toLocaleDateString('it-IT'):''}</div>`;
 
@@ -1452,6 +1453,29 @@ function changePassword() {
   alert('✓ Password cambiata con successo.');
 }
 
+
+// ── BACKUP AUTOMATICO SETTIMANALE ────────────────────────────────────────
+function checkAutoBackup() {
+  if (!patients.length) return;
+  const lastKey = 'rm3_last_backup';
+  const last = appStorage.getItem(lastKey);
+  const now  = today();
+  if (last && daysBetween(last, now) < 7) return;
+  // Esegui backup silenzioso
+  try {
+    const payload = { version:3, exportedAt:new Date().toISOString(), patients };
+    const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `ricettamanager-backup-auto-${now}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    appStorage.setItem(lastKey, now);
+    console.log('Backup automatico eseguito:', now);
+  } catch(e) { console.warn('Backup automatico fallito:', e); }
+}
+
 // ── AUTO REFRESH ogni ora ─────────────────────────────────────────────────
 setInterval(()=>{render();updateHeader();},3600000);
 
@@ -1461,6 +1485,7 @@ if (checkSession()) {
   document.getElementById('loginScreen').style.display = 'none';
 }
 render();
+setTimeout(checkAutoBackup, 3000); // backup auto dopo 3s dall'avvio
 </script>
 </body>
 </html>
