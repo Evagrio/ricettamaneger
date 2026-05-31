@@ -313,6 +313,11 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
   <div class="logo">Ricetta<em>Manager</em></div>
   <div class="hdr-right">
     <div class="clock"><div id="hDate"></div><div id="hAlert" style="color:var(--gold);font-weight:700"></div></div>
+    <button class="btn btn-ghost btn-sm" onclick="openOrderList()">📋 Da ordinare</button>
+    <button class="btn btn-ghost btn-sm" onclick="printInventory(activeGroup)">📄 Inventario</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportData()">💾 Esporta</button>
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('importFile2').click()">📂 Importa</button>
+    <input type="file" id="importFile2" accept=".json" style="display:none" onchange="importData(event)">
     <button class="lock-btn" onclick="openOv('ovChangePwd')" title="Cambia password">🔑</button>
     <button class="lock-btn" onclick="lockApp()" title="Blocca app">🔒</button>
   </div>
@@ -331,13 +336,7 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
       <h2>Terapie attive</h2>
       <p>Farmaci personali · scorte scalate automaticamente · aggiornamento in tempo reale</p>
     </div>
-    <div class="tbar-right">
-      <button class="btn btn-ghost btn-sm" onclick="openOrderList()">📋 Da ordinare</button>
-      <button class="btn btn-ghost btn-sm" onclick="printInventory(activeGroup)" title="Inventario PDF gruppo attivo">📄 Inventario</button>
-      <button class="btn btn-ghost btn-sm" onclick="exportData()" title="Esporta backup dati">💾 Esporta</button>
-      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('importFile').click()" title="Importa backup dati">📂 Importa</button>
-      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
-    </div>
+    <div class="tbar-right"></div>
   </div>
 
   <!-- GROUP FILTER -->
@@ -395,6 +394,7 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 <div class="overlay" id="ovDrug">
   <div class="modal">
     <h3 id="drgTitle">Aggiungi farmaco</h3>
+    <div id="drgPatientName" style="font-family:'Inconsolata',monospace;font-size:0.82rem;color:var(--gold);margin-bottom:14px;margin-top:-10px;letter-spacing:0.04em;font-weight:600;"></div>
     <div class="fg"><label class="fl">Nome farmaco</label><input class="fi" id="dName" placeholder="es. Ramipril 5mg"></div>
     <input type="hidden" id="dUnit" value="uni">
     <div class="frow">
@@ -1165,6 +1165,8 @@ function delPatient(id) {
 function openAddDrug(pid) {
   curPid=pid; editDid=null;
   document.getElementById('drgTitle').textContent='Aggiungi farmaco';
+  const _addPt = getP(pid);
+  document.getElementById('drgPatientName').textContent = _addPt ? '👤 ' + _addPt.name : '';
   ['dName','dCpDie','dCpBox','dCpTot'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('dPreview').style.display='none';
   openOv('ovDrug');
@@ -1173,6 +1175,8 @@ function openEditDrug(pid, did) {
   curPid=pid; editDid=did;
   const d=getP(pid).drugs.find(x=>x.id===did);
   document.getElementById('drgTitle').textContent='Modifica farmaco';
+  const _editPt = getP(curPid);
+  document.getElementById('drgPatientName').textContent = _editPt ? '👤 ' + _editPt.name : '';
   document.getElementById('dName').value=d.name;
   document.getElementById('dCpDie').value=d.cpDie;
   document.getElementById('dCpBox').value=d.cpBox;
