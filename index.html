@@ -267,6 +267,8 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 /* LOCK BTN in header */
 .lock-btn { background:none; border:1px solid var(--border-hi); border-radius:8px; padding:5px 10px; color:var(--muted); cursor:pointer; font-size:0.8rem; transition:all .15s; }
 .lock-btn:hover { color:var(--red); border-color:var(--red); }
+.desktop-only { display:none; }
+@media (min-width:431px) { .desktop-only { display:inline-flex; } }
 </style>
 </head>
 <body>
@@ -318,6 +320,7 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
     <button class="btn btn-ghost btn-sm" onclick="exportData()">💾 Esporta</button>
     <button class="btn btn-ghost btn-sm" onclick="document.getElementById('importFile2').click()">📂 Importa</button>
     <input type="file" id="importFile2" accept=".json" style="display:none" onchange="importData(event)">
+    <button class="lock-btn desktop-only" onclick="openOv('ovChangePwd')" title="Cambia password">🔑</button>
   </div>
 </header>
 
@@ -1481,7 +1484,9 @@ setInterval(()=>{render();updateHeader();},3600000);
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 updateHeader();
-if (checkSession()) {
+// Login solo su schermi larghi (PC) — su iPhone schermo ≤430px nessun login
+const isMobile = window.innerWidth <= 430;
+if (isMobile || checkSession()) {
   document.getElementById('loginScreen').style.display = 'none';
 }
 render();
