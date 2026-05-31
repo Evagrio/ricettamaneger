@@ -852,7 +852,14 @@ function printOrderList(group = activeGroup) {
   const low = items.filter(i => i.calc.status === 'low').length;
   const dateField = '<span class="date-field" aria-label="data"></span>';
 
-  const rows = items.map(({patient, drug, calc}) => {
+  // Ordina per giorni residui crescenti (0 = più urgente)
+  const sortedPrint = [...items].sort((a, b) => {
+    const da = isFinite(a.calc.daysLeft) ? a.calc.daysLeft : 9999;
+    const db = isFinite(b.calc.daysLeft) ? b.calc.daysLeft : 9999;
+    return da - db;
+  });
+
+  const rows = sortedPrint.map(({patient, drug, calc}) => {
     const cpTxt = calc.status === 'urgent' ? `0 ${drugUnit(drug)}` : qtyText(calc.cp, drug);
     const daysTxt = calc.status === 'urgent' ? '0 gg' : isFinite(calc.daysLeft) ? `${calc.daysLeft} gg` : '—';
     const boxTxt = packText(calc, drug);
