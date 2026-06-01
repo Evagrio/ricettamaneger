@@ -144,6 +144,11 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 .group-bar { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; align-items:center; }
 .gbtn { display:inline-flex; align-items:center; gap:6px; padding:7px 16px; border-radius:20px; border:1.5px solid var(--border-hi); background:var(--surface2); color:var(--muted); font-family:'Nunito',sans-serif; font-size:0.82rem; font-weight:700; cursor:pointer; transition:all .15s; }
 .gBtn-all.active  { background:var(--gold);    border-color:var(--gold);    color:#0F1117; }
+.group-search { display:flex; align-items:center; background:var(--surface2); border:1.5px solid var(--border-hi); border-radius:20px; padding:5px 14px; gap:7px; flex:1; max-width:280px; transition:border-color .15s; }
+.group-search:focus-within { border-color:var(--gold); }
+.group-search input { background:none; border:none; outline:none; color:var(--text); font-family:'Nunito',sans-serif; font-size:0.83rem; width:100%; }
+.group-search input::placeholder { color:var(--dim); }
+.group-search .gs-icon { color:var(--muted); font-size:0.9rem; flex-shrink:0; }
 .gBtn-cra.active  { background:#5B8DEF;        border-color:#5B8DEF;        color:#fff; }
 .gBtn-cd.active   { background:#9B59B6;        border-color:#9B59B6;        color:#fff; }
 .gBtn-all:hover   { border-color:var(--gold);  color:var(--gold); }
@@ -342,7 +347,12 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 
   <!-- GROUP FILTER -->
   <div class="group-bar">
-    <button class="gbtn gBtn-all active" id="gbtn-all" onclick="setGroup('all')">👥 Tutti <span id="cnt-all"></span></button>
+    <div class="group-search">
+      <span class="gs-icon">🔍</span>
+      <input type="text" id="inlineSearch" placeholder="Cerca paziente..."
+        onfocus="onSearchFocus()"
+        oninput="onSearchInput(this.value)">
+    </div>
     <button class="gbtn gBtn-cra" id="gbtn-cra" onclick="setGroup('CRA')">🏠 CRA <span id="cnt-cra"></span></button>
     <button class="gbtn gBtn-cd"  id="gbtn-cd"  onclick="setGroup('CD')">☀️ Centro Diurno <span id="cnt-cd"></span></button>
     <button class="btn btn-gold btn-sm" onclick="openAddPatient()">＋ Paziente</button>
@@ -505,6 +515,7 @@ function loadPatients() {
 let patients = loadPatients();
 let editPid = null, editDid = null, curPid = null;
 let activeGroup = 'all'; // 'all' | 'CRA' | 'CD'
+let activeSearch = ''; // inline search query
 
 function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 function save() { appStorage.setItem('rm3_pts', JSON.stringify(patients)); }
@@ -522,19 +533,34 @@ function esc(value) {
 
 // ── GROUP FILTER ──────────────────────────────────────────────────────────
 function setGroup(g) {
-  activeGroup = g;
-  ['all','cra','cd'].forEach(k => {
-    const btn = document.getElementById('gbtn-'+k);
-    btn.classList.remove('active');
-  });
-  document.getElementById('gbtn-'+(g==='all'?'all':g.toLowerCase())).classList.add('active');
+  activeGroup  = g;
+  activeSearch = '';
+  const searchEl = document.getElementById('inlineSearch');
+  if (searchEl) searchEl.value = '';
+  ['cra','cd'].forEach(k => document.getElementById('gbtn-'+k).classList.remove('active'));
+  if (g !== 'all') document.getElementById('gbtn-'+g.toLowerCase()).classList.add('active');
+  render();
+}
+
+function onSearchFocus() {
+  // On focus: clear group filter so all patients show
+  activeSearch = '';
+  activeGroup  = 'all';
+  ['cra','cd'].forEach(k => document.getElementById('gbtn-'+k).classList.remove('active'));
+  render();
+}
+
+function onSearchInput(val) {
+  activeSearch = val.trim().toLowerCase();
+  // Also clear group filter when typing
+  activeGroup = 'all';
+  ['cra','cd'].forEach(k => document.getElementById('gbtn-'+k).classList.remove('active'));
   render();
 }
 
 function updateGroupCounts() {
   const cra = patients.filter(p=>(p.group||'CRA')==='CRA').length;
   const cd  = patients.filter(p=>p.group==='CD').length;
-  document.getElementById('cnt-all').textContent = `(${patients.length})`;
   document.getElementById('cnt-cra').textContent = `(${cra})`;
   document.getElementById('cnt-cd').textContent  = `(${cd})`;
 }
@@ -931,6 +957,14 @@ function render(filterIds) {
 
   // Apply group filter
   if (activeGroup !== 'all') list = list.filter(p=>(p.group||'CRA')===activeGroup);
+
+  // Apply inline search filter
+  if (activeSearch) {
+    list = list.filter(p =>
+      p.name.toLowerCase().includes(activeSearch) ||
+      (p.code||'').toLowerCase().includes(activeSearch)
+    );
+  }
 
   const score = p => { const ss = p.drugs.map(d=>computeDrug(d).status); return ss.includes('urgent')?0:ss.includes('warn')?1:ss.includes('low')?2:3; };
   list.sort((a,b)=>score(a)-score(b));
