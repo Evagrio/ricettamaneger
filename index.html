@@ -67,6 +67,11 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 /* PATIENT CARD */
 .pcard { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); overflow:hidden; transition:box-shadow .2s, border-color .2s; }
 .pcard:hover { border-color:var(--border-hi); box-shadow:0 8px 32px rgba(0,0,0,.4); }
+.pcard.suspended { opacity:0.6; border-color:var(--border) !important; border-style:dashed !important; }
+.pcard.suspended .pbar-fill { background:var(--border-hi) !important; }
+.suspended-badge { display:inline-flex; align-items:center; gap:5px; font-family:'Inconsolata',monospace; font-size:0.68rem; font-weight:700; padding:3px 10px; border-radius:20px; background:var(--surface2); border:1px solid var(--border-hi); color:var(--muted); margin-bottom:8px; }
+.btn-suspend { font-size:0.72rem; padding:5px 10px; }
+.btn-suspend.active { background:var(--amber-bg); color:var(--amber); border-color:var(--amber); }
 .pcard.s-urgent { border-color:var(--red); }
 .pcard.s-warn   { border-color:var(--amber); }
 .pcard.s-low    { border-color:var(--orange); }
@@ -584,14 +589,16 @@ function daysBetween(isoA, isoB) {
 }
 
 // Returns current real pill count (float, ≥ 0)
-function currentCp(drug) {
+function currentCp(drug, patient) {
+  // If patient is suspended, freeze consumption at lastSync value
+  if (patient && patient.suspended) return Math.max(0, drug.cpRemaining);
   const elapsed = daysBetween(drug.lastSync, today());
   return Math.max(0, drug.cpRemaining - elapsed * drug.cpDie);
 }
 
 // Derived display values
-function computeDrug(drug) {
-  const cp      = currentCp(drug);
+function computeDrug(drug, patient) {
+  const cp      = currentCp(drug, patient);
   const boxes   = Math.floor(cp / drug.cpBox);          // confezioni intere chiuse
   const partial = cp % drug.cpBox;                       // uni nella conf. aperta (o 0)
   const hasOpen = partial > 0;                           // c'è una confezione aperta
@@ -643,7 +650,7 @@ function refreshAlerts() {
   const urgent=[], warn=[], low=[];
   patients.forEach(p => {
     p.drugs.forEach(d => {
-      const s = computeDrug(d).status;
+      const s = computeDrug(d, p).status;
       const lbl = `${p.name} · ${d.name}`;
       if (s==='urgent') urgent.push(lbl);
       else if (s==='warn') warn.push(lbl);
@@ -981,7 +988,7 @@ function render(filterIds) {
     );
   }
 
-  const score = p => { const ss = p.drugs.map(d=>computeDrug(d).status); return ss.includes('urgent')?0:ss.includes('warn')?1:2; };
+  const score = p => { if (p.suspended) return 3; const ss = p.drugs.map(d=>computeDrug(d,p).status); return ss.includes('urgent')?0:ss.includes('warn')?1:2; };
   list.sort((a,b)=>score(a)-score(b));
   updateGroupCounts();
 
@@ -998,8 +1005,8 @@ function render(filterIds) {
     const grpTag = `<span class="group-tag tag-${grp.toLowerCase()}">${grp}</span>`;
 
     const rows = patient.drugs.map(drug => {
-      const c = computeDrug(drug);
-      const s = c.status;
+      const c = computeDrug(drug, patient);
+      const s = patient.suspended ? 'ok' : c.status;
       const pct = c.pct.toFixed(1);
       let boxIcons = '';
       for (let i=0;i<Math.min(c.boxes,8);i++) boxIcons += `<span class="box-icon">📦</span>`;
@@ -1055,15 +1062,21 @@ function render(filterIds) {
     const notesLabel = hasNotes ? '📝 Note' : '📝 Aggiungi nota';
 
     grid.innerHTML += `
-      <div class="pcard s-${ws}" id="card-${patient.id}">
+      <div class="pcard s-${ws}${patient.suspended?' suspended':''}" id="card-${patient.id}">
         <div class="pcard-head">
           <div><div class="pname">${esc(patient.name)}</div>${code}</div>
           <div class="pcard-actions">
+            <button class="btn btn-ghost btn-sm btn-suspend ${patient.suspended?'active':''}"
+              onclick="toggleSuspend('${patient.id}')"
+              title="${patient.suspended?'Riattiva terapia':'Sospendi terapia'}">
+              ${patient.suspended?'▶ Riattiva':'⏸ Sospendi'}
+            </button>
             <button class="btn btn-ghost btn-sm" onclick="printPatient('${patient.id}')" title="Stampa inventario">🖨️</button>
             <button class="btn btn-ghost btn-sm" onclick="openEditPatient('${patient.id}')">✎</button>
             <button class="btn btn-red btn-sm" onclick="delPatient('${patient.id}')">✕</button>
           </div>
         </div>
+        ${patient.suspended ? '<div style="padding:6px 16px 2px"><span class="suspended-badge">⏸ Terapia sospesa — conteggio farmaci in pausa</span></div>' : ''}
         ${expiryRow}
         <div class="drug-list">${rows}</div>
         <button class="add-drug-btn" onclick="openAddDrug('${patient.id}')">＋ Aggiungi farmaco</button>
@@ -1082,6 +1095,26 @@ function render(filterIds) {
   });
 
   refreshAlerts();
+}
+
+// ── SUSPEND ──────────────────────────────────────────────────────────────────
+function toggleSuspend(pid) {
+  const p = getP(pid);
+  if (!p.suspended) {
+    // Sospendi: freeziamo cpRemaining al valore attuale prima di sospendere
+    p.drugs.forEach(d => {
+      d.cpRemaining = currentCp(d);
+      d.lastSync    = today();
+    });
+    p.suspended     = true;
+    p.suspendedDate = today();
+  } else {
+    // Riattiva: resettiamo lastSync a oggi così il conteggio riparte da qui
+    p.drugs.forEach(d => { d.lastSync = today(); });
+    p.suspended     = false;
+    p.suspendedDate = null;
+  }
+  save(); render();
 }
 
 // ── MANUAL CONTROLS ───────────────────────────────────────────────────────
