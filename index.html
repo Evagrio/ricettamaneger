@@ -37,7 +37,10 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 .alert-ttl { font-family:'Inconsolata',monospace; font-size:0.68rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; margin-bottom:7px; }
 .alert-inner.urgent .alert-ttl { color:var(--red); }
 .alert-inner.warn   .alert-ttl { color:var(--amber); }
-.alert-chips { display:flex; flex-wrap:wrap; gap:5px; }
+.alert-chips { display:flex; flex-direction:column; gap:9px; }
+.alert-section { display:flex; flex-direction:column; gap:4px; }
+.alert-sec-ttl { font-family:'Inconsolata',monospace; font-size:0.66rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.alert-sec-chips { display:flex; flex-wrap:wrap; gap:5px; }
 .chip { font-size:0.78rem; padding:3px 10px; border-radius:20px; }
 .chip.urgent { background:rgba(224,82,82,.15); border:1px solid rgba(224,82,82,.3); color:var(--text); }
 .chip.warn   { background:rgba(232,145,58,.15); border:1px solid rgba(232,145,58,.3); color:var(--text); }
@@ -638,42 +641,51 @@ function updateHeader() {
 
 // ── ALERTS ────────────────────────────────────────────────────────────────
 function refreshAlerts() {
-  const urgent=[], warn=[], low=[];
+  // Tre categorie distinte: farmaci CRA, farmaci Centro Diurno, documenti (Tessera/Medico)
+  const cats = {
+    CRA: { icon:'🏠', label:'Farmaci CRA',            items:[] },
+    CD:  { icon:'☀️', label:'Farmaci Centro Diurno',  items:[] },
+    DOC: { icon:'🪪', label:'Tessera Sanitaria / Medico', items:[] }
+  };
   patients.forEach(p => {
+    const g = (p.group || 'CRA') === 'CD' ? 'CD' : 'CRA';
     p.drugs.forEach(d => {
       const s = computeDrug(d, p).status;
-      const lbl = `${p.name} · ${d.name}`;
-      if (s==='urgent') urgent.push(lbl);
-      else if (s==='warn') warn.push(lbl);
-      else if (s==='low')  low.push(lbl);
+      if (s === 'urgent' || s === 'warn')
+        cats[g].items.push({ lbl:`${p.name} · ${d.name}`, status:s });
     });
     [{label:'Tessera', date:p.tessera},{label:'Medico', date:p.medico}].forEach(({label, date}) => {
       if (!date) return;
       const days = daysBetween(today(), date);
-      const lbl  = `${p.name} · ${label}`;
-      if (days < 0)        urgent.push(lbl + ' (scaduto)');
-      else if (days <= 30) warn.push(lbl + ` (${days}gg)`);
+      if (days < 0)        cats.DOC.items.push({ lbl:`${p.name} · ${label} (scaduto)`,  status:'urgent' });
+      else if (days <= 30) cats.DOC.items.push({ lbl:`${p.name} · ${label} (${days}gg)`, status:'warn' });
     });
   });
-  const banner = document.getElementById('alertBanner');
-  const inner  = document.getElementById('alertInner');
-  const total  = urgent.length + warn.length + low.length;
+  const banner   = document.getElementById('alertBanner');
+  const inner    = document.getElementById('alertInner');
+  const allItems = [...cats.CRA.items, ...cats.CD.items, ...cats.DOC.items];
+  const total    = allItems.length;
   if (!total) {
     banner.classList.remove('show');
     document.getElementById('hAlert').textContent = '✓ Tutto OK';
     return;
   }
   banner.classList.add('show');
-  const isUrgent = urgent.length > 0;
-  const isWarn   = warn.length > 0;
-  inner.className = 'alert-inner ' + (isUrgent ? 'urgent' : 'warn');
-  document.getElementById('alertTtl').textContent = isUrgent
-    ? `Alert Urgenti n. ${urgent.length}`
-    : isWarn
-    ? `📦 ${warn.length} farmac${warn.length>1?'i':'o'} all'ultima confezione`
-    : `⏱ ${low.length} farmac${low.length>1?'i':'o'} in esaurimento (≤10gg)`;
-  document.getElementById('alertChips').innerHTML = '';
-  document.getElementById('hAlert').textContent = `${total} alert attiv${total>1?'i':'o'}`;
+  const nUrgent = allItems.filter(i => i.status === 'urgent').length;
+  inner.className = 'alert-inner ' + (nUrgent ? 'urgent' : 'warn');
+  document.getElementById('alertTtl').textContent = nUrgent
+    ? `Alert urgenti n. ${nUrgent} · ${total} totali`
+    : `Alert attivi n. ${total}`;
+  document.getElementById('alertChips').innerHTML = Object.values(cats)
+    .filter(c => c.items.length)
+    .map(c => `
+      <div class="alert-section">
+        <div class="alert-sec-ttl">${c.icon} ${c.label} (${c.items.length})</div>
+        <div class="alert-sec-chips">${c.items.map(i =>
+          `<span class="chip ${i.status}">${esc(i.lbl)}</span>`).join('')}</div>
+      </div>`).join('');
+  document.getElementById('hAlert').textContent =
+    `${total} alert · ${cats.CRA.items.length} CRA · ${cats.CD.items.length} CD · ${cats.DOC.items.length} doc`;
 }
 
 function getOrderItems(group = 'all') {
