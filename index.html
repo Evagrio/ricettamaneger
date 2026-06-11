@@ -431,17 +431,10 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
       <div class="fhint" id="dStockHint">Conta tutte le unità: confezioni chiuse <strong>+</strong> confezione aperta.</div>
     </div>
 
-    <div class="frow">
-      <div class="fg">
-        <label class="fl">⚠ Soglia Alert (giorni)</label>
-        <input class="fi" type="number" id="dThreshAlert" min="1" step="1" value="14" placeholder="14">
-        <div class="fhint">Default: <strong>14 giorni</strong></div>
-      </div>
-      <div class="fg">
-        <label class="fl">🔴 Soglia Urgente (giorni)</label>
-        <input class="fi" type="number" id="dThreshUrgent" min="1" step="1" value="7" placeholder="7">
-        <div class="fhint">Default: <strong>7 giorni</strong></div>
-      </div>
+    <div class="fg">
+      <label class="fl">⚠ Soglia alert scorta (giorni)</label>
+      <input class="fi" type="number" id="dThreshAlert" min="1" step="1" value="10" placeholder="10">
+      <div class="fhint">Il farmaco appare nella lista "da ordinare" quando restano ≤ <strong>N giorni</strong> di scorta. Default: <strong>10 giorni</strong></div>
     </div>
 
     <div class="preview-box" id="dPreview"></div>
@@ -607,15 +600,13 @@ function computeDrug(drug, patient) {
   const maxCp     = drug.cpBox * Math.ceil(drug.cpRemaining / drug.cpBox || 1);
   const pct       = drug.cpRemaining > 0 ? Math.min(100, (cp / drug.cpRemaining) * 100) : 0;
 
-  // Status basato su soglie giorni configurabili per farmaco
-  const threshAlert  = drug.threshAlert  || 14;
-  const threshUrgent = drug.threshUrgent || 7;
-  const status = cp === 0              ? 'urgent'
-               : daysLeft <= threshUrgent ? 'urgent'
-               : daysLeft <= threshAlert  ? 'warn'
+  // Status basato su unica soglia giorni configurabile per farmaco
+  const threshAlert = drug.threshAlert || 10;
+  const status = cp === 0               ? 'urgent'
+               : daysLeft <= threshAlert ? 'warn'
                : 'ok';
 
-  return { cp, boxes, partial: Math.round(partial), hasOpen, totalConf, daysLeft, pct, status, threshAlert, threshUrgent };
+  return { cp, boxes, partial: Math.round(partial), hasOpen, totalConf, daysLeft, pct, status, threshAlert };
 }
 
 function drugUnit(drug) {
@@ -919,7 +910,7 @@ function printOrderList(group = activeGroup) {
     return `<tr style="background:${bg}">
       <td class="pt-name">${esc(patient.name)}${patient.code ? `<br><span class="pt-code">${esc(patient.code)}</span>` : ''}</td>
       <td class="pt-drug">${dot} ${esc(drug.name)}</td>
-      <td class="pt-stock">${cpTxt} · ${daysTxt}<br><span class="pt-boxes">${boxTxt}</span></td>
+      <td class="pt-stock"><span class="pt-days-big ${calc.status}">${daysTxt}</span><br><span class="pt-units-small">${cpTxt}</span></td>
       <td class="pt-modality">${modalityTxt}</td>
       <td class="pt-wf">${dateField}</td>
       <td class="pt-wf">${dateField}</td>
@@ -952,8 +943,12 @@ function printOrderList(group = activeGroup) {
   .pt-code, .pt-stock, .pt-boxes { font-family:monospace; }
   .pt-code { font-size:0.62rem; color:#999; font-weight:400; }
   .pt-drug { font-size:0.8rem; }
-  .pt-stock { font-size:0.75rem; font-weight:600; white-space:nowrap; }
-  .pt-boxes { font-size:0.68rem; color:#666; }
+  .pt-stock { font-family:monospace; font-size:0.75rem; font-weight:600; white-space:nowrap; vertical-align:middle; }
+  .pt-days-big { display:block; font-size:1.05rem; font-weight:900; letter-spacing:-.01em; }
+  .pt-days-big.urgent { color:#C0392B; }
+  .pt-days-big.warn   { color:#D35400; }
+  .pt-days-big.ok     { color:#1E8449; }
+  .pt-units-small { font-family:monospace; font-size:0.68rem; color:#888; font-weight:400; }
   .pt-wf { text-align:center; min-width:100px; padding:12px 10px 8px; background:#fff; border-left:1.5px solid #B7950B; }
   .pt-notes { min-width:80px; background:#fff; }
   .pt-modality { font-size:0.75rem; color:#1A5276; background:#EBF5FB; border-left:3px solid #2E86C1; padding:5px 8px; vertical-align:middle; font-style:italic; }
@@ -1027,7 +1022,7 @@ function render(filterIds) {
               <div class="sdot ${s}"></div>
               <div style="min-width:0">
                 <div class="dname">${esc(drug.name)}</div>
-                <div class="ddose">${doseText(drug)} · ⚠${drug.threshAlert||14}gg 🔴${drug.threshUrgent||7}gg</div>
+                <div class="ddose">${doseText(drug)} · ⚠ alert ${drug.threshAlert||10}gg</div>
               </div>
             </div>
             <div class="drow-actions">
@@ -1266,8 +1261,7 @@ function openAddDrug(pid) {
   const _addPt = getP(pid);
   document.getElementById('drgPatientName').textContent = _addPt ? '👤 ' + _addPt.name : '';
   ['dName','dCpDie','dCpBox','dCpTot'].forEach(i=>document.getElementById(i).value='');
-  document.getElementById('dThreshAlert').value=14;
-  document.getElementById('dThreshUrgent').value=7;
+  document.getElementById('dThreshAlert').value=10;
   document.getElementById('dPreview').style.display='none';
   openOv('ovDrug');
 }
@@ -1281,8 +1275,7 @@ function openEditDrug(pid, did) {
   document.getElementById('dCpDie').value=d.cpDie;
   document.getElementById('dCpBox').value=d.cpBox;
   document.getElementById('dCpTot').value=Math.round(currentCp(d));
-  document.getElementById('dThreshAlert').value=d.threshAlert||14;
-  document.getElementById('dThreshUrgent').value=d.threshUrgent||7;
+  document.getElementById('dThreshAlert').value=d.threshAlert||10;
   updatePreview();
   openOv('ovDrug');
 }
@@ -1313,15 +1306,14 @@ function saveDrug() {
   const cpDie       = parseFloat(document.getElementById('dCpDie').value);
   const cpBox       = parseInt(document.getElementById('dCpBox').value);
   const cpTot       = parseInt(document.getElementById('dCpTot').value);
-  const threshAlert  = parseInt(document.getElementById('dThreshAlert').value) || 14;
-  const threshUrgent = parseInt(document.getElementById('dThreshUrgent').value) || 7;
+  const threshAlert  = parseInt(document.getElementById('dThreshAlert').value) || 10;
   if(!name||!cpDie||!cpBox||isNaN(cpTot)){alert('Compila tutti i campi.');return;}
   const p=getP(curPid);
   if(editDid){
     const d=p.drugs.find(x=>x.id===editDid);
-    Object.assign(d,{name,cpDie,cpBox,cpRemaining:cpTot,lastSync:today(),threshAlert,threshUrgent});
+    Object.assign(d,{name,cpDie,cpBox,cpRemaining:cpTot,lastSync:today(),threshAlert});
   } else {
-    p.drugs.push({id:uid(),name,cpDie,cpBox,cpRemaining:cpTot,lastSync:today(),threshAlert,threshUrgent});
+    p.drugs.push({id:uid(),name,cpDie,cpBox,cpRemaining:cpTot,lastSync:today(),threshAlert});
   }
   save(); closeOv('ovDrug'); render();
 }
