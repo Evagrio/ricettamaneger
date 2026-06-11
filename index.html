@@ -431,17 +431,10 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
       <div class="fhint" id="dStockHint">Conta tutte le unità: confezioni chiuse <strong>+</strong> confezione aperta.</div>
     </div>
 
-    <div class="frow">
-      <div class="fg">
-        <label class="fl">⚠ Soglia Alert (giorni)</label>
-        <input class="fi" type="number" id="dThreshAlert" min="1" step="1" value="14" placeholder="14">
-        <div class="fhint">Default: <strong>14 giorni</strong></div>
-      </div>
-      <div class="fg">
-        <label class="fl">🔴 Soglia Urgente (giorni)</label>
-        <input class="fi" type="number" id="dThreshUrgent" min="1" step="1" value="7" placeholder="7">
-        <div class="fhint">Default: <strong>7 giorni</strong></div>
-      </div>
+    <div class="fg">
+      <label class="fl">🔴 Soglia Alert — giorni residui</label>
+      <input class="fi" type="number" id="dThreshAlert" min="1" step="1" value="10" placeholder="10">
+      <div class="fhint">Default: <strong>10 giorni</strong> — sotto questa soglia il farmaco appare in lista ordini</div>
     </div>
 
     <div class="preview-box" id="dPreview"></div>
@@ -607,15 +600,13 @@ function computeDrug(drug, patient) {
   const maxCp     = drug.cpBox * Math.ceil(drug.cpRemaining / drug.cpBox || 1);
   const pct       = drug.cpRemaining > 0 ? Math.min(100, (cp / drug.cpRemaining) * 100) : 0;
 
-  // Status basato su soglie giorni configurabili per farmaco
-  const threshAlert  = drug.threshAlert  || 14;
-  const threshUrgent = drug.threshUrgent || 7;
+  // Status basato su soglia unica configurabile per farmaco (default 10 gg)
+  const threshAlert = drug.threshAlert || 10;
   const status = cp === 0              ? 'urgent'
-               : daysLeft <= threshUrgent ? 'urgent'
-               : daysLeft <= threshAlert  ? 'warn'
+               : daysLeft <= threshAlert ? 'warn'
                : 'ok';
 
-  return { cp, boxes, partial: Math.round(partial), hasOpen, totalConf, daysLeft, pct, status, threshAlert, threshUrgent };
+  return { cp, boxes, partial: Math.round(partial), hasOpen, totalConf, daysLeft, pct, status, threshAlert };
 }
 
 function drugUnit(drug) {
@@ -647,14 +638,13 @@ function updateHeader() {
 
 // ── ALERTS ────────────────────────────────────────────────────────────────
 function refreshAlerts() {
-  const urgent=[], warn=[], low=[];
+  const urgent=[], warn=[];
   patients.forEach(p => {
     p.drugs.forEach(d => {
       const s = computeDrug(d, p).status;
       const lbl = `${p.name} · ${d.name}`;
       if (s==='urgent') urgent.push(lbl);
       else if (s==='warn') warn.push(lbl);
-      else if (s==='low')  low.push(lbl);
     });
     [{label:'Tessera', date:p.tessera},{label:'Medico', date:p.medico}].forEach(({label, date}) => {
       if (!date) return;
@@ -666,7 +656,7 @@ function refreshAlerts() {
   });
   const banner = document.getElementById('alertBanner');
   const inner  = document.getElementById('alertInner');
-  const total  = urgent.length + warn.length + low.length;
+  const total  = urgent.length + warn.length;
   if (!total) {
     banner.classList.remove('show');
     document.getElementById('hAlert').textContent = '✓ Tutto OK';
@@ -674,13 +664,10 @@ function refreshAlerts() {
   }
   banner.classList.add('show');
   const isUrgent = urgent.length > 0;
-  const isWarn   = warn.length > 0;
   inner.className = 'alert-inner ' + (isUrgent ? 'urgent' : 'warn');
   document.getElementById('alertTtl').textContent = isUrgent
-    ? `Alert Urgenti n. ${urgent.length}`
-    : isWarn
-    ? `📦 ${warn.length} farmac${warn.length>1?'i':'o'} all'ultima confezione`
-    : `⏱ ${low.length} farmac${low.length>1?'i':'o'} in esaurimento (≤10gg)`;
+    ? `🔴 ${urgent.length} farmac${urgent.length>1?'i':'o'} esaurit${urgent.length>1?'i':'o'} / scaduti`
+    : `⏱ ${warn.length} farmac${warn.length>1?'i':'o'} in esaurimento`;
   document.getElementById('alertChips').innerHTML = '';
   document.getElementById('hAlert').textContent = `${total} alert attiv${total>1?'i':'o'}`;
 }
@@ -691,7 +678,7 @@ function getOrderItems(group = 'all') {
   source.forEach(p => {
     (p.drugs || []).forEach(d => {
       const c = computeDrug(d);
-      if (!['urgent','warn','low'].includes(c.status)) return;
+      if (!['urgent','warn'].includes(c.status)) return;
       items.push({ patient:p, drug:d, calc:c });
     });
   });
@@ -705,8 +692,7 @@ function getOrderItems(group = 'all') {
 
 function orderStatusLabel(status) {
   if (status === 'urgent') return 'Esaurito';
-  if (status === 'warn') return 'Ultima confezione';
-  return '≤10 giorni';
+  return 'Scorta in esaurimento';
 }
 
 function openOrderList() {
@@ -721,8 +707,7 @@ function openOrderList() {
   }
   const urgent = items.filter(i => i.calc.status === 'urgent').length;
   const warn = items.filter(i => i.calc.status === 'warn').length;
-  const low = items.filter(i => i.calc.status === 'low').length;
-  summary.textContent = `${items.length} farmaci da controllare · ${urgent} esauriti · ${warn} ultima confezione · ${low} entro 10 giorni`;
+  summary.textContent = `${items.length} farmaci da controllare · ${urgent} esauriti · ${warn} in esaurimento`;
   // Sort by daysLeft ascending: 0 gg first (most urgent), Infinity last
   const sortedItems = [...items].sort((a, b) => {
     const da = isFinite(a.calc.daysLeft) ? a.calc.daysLeft : 9999;
@@ -856,14 +841,15 @@ function buildOrderWordHtml(group = activeGroup) {
   const groupLabel = group === 'CRA' ? 'CRA' : group === 'CD' ? 'Centro Diurno' : 'Tutti i gruppi';
   const urgent = items.filter(i => i.calc.status === 'urgent').length;
   const warn = items.filter(i => i.calc.status === 'warn').length;
-  const low = items.filter(i => i.calc.status === 'low').length;
   const bodyRows = items.map(({patient, drug, calc}) => {
     const cpTxt = calc.status === 'urgent' ? `0 ${drugUnit(drug)}` : qtyText(calc.cp, drug);
-    const daysTxt = calc.status === 'urgent' ? '0 gg' : isFinite(calc.daysLeft) ? `${calc.daysLeft} gg` : '—';
+    const daysVal = calc.status === 'urgent' ? 0 : isFinite(calc.daysLeft) ? calc.daysLeft : null;
+    const daysTxt = daysVal === null ? '—' : daysVal === 0 ? 'ESAURITO' : `${daysVal} gg`;
     return `<tr>
       <td><strong>${esc(patient.name)}</strong>${patient.code ? `<br><span class="muted">${esc(patient.code)}</span>` : ''}</td>
       <td>${esc(drug.name)}</td>
-      <td>${cpTxt}<br><span class="muted">${daysTxt}</span></td>
+      <td style="text-align:center;font-size:14pt;font-weight:bold;color:${daysVal===0?'#C0392B':'#D35400'}">${daysTxt}</td>
+      <td>${cpTxt}</td>
       <td>${esc(orderStatusLabel(calc.status))}</td>
       <td class="write"></td>
       <td class="write"></td>
@@ -874,9 +860,9 @@ function buildOrderWordHtml(group = activeGroup) {
   const body = `
     <h1>Farmaci personali da ordinare · ${esc(groupLabel)}</h1>
     <div class="meta">Generato il ${esc(dateStr)} alle ${esc(timeStr)} · solo farmaci in esaurimento</div>
-    <div class="summary">${items.length} farmaci da ordinare · ${urgent} esauriti · ${warn} ultima confezione · ${low} entro 10 giorni</div>
+    <div class="summary">${items.length} farmaci da ordinare · ${urgent} esauriti · ${warn} in esaurimento</div>
     <table>
-      <thead><tr><th>Paziente</th><th>Farmaco</th><th>Scorta</th><th>Stato</th><th>Ricetta richiesta</th><th>Ricetta prodotta</th><th>Farmaco consegnato</th><th>Note</th></tr></thead>
+      <thead><tr><th>Paziente</th><th>Farmaco</th><th style="text-align:center">Giorni rimasti</th><th>Scorta</th><th>Stato</th><th>Ricetta richiesta</th><th>Ricetta prodotta</th><th>Farmaco consegnato</th><th>Note</th></tr></thead>
       <tbody>${bodyRows}</tbody>
     </table>`;
   return wordDocShell('Farmaci personali da ordinare', body, 'Landscape');
@@ -897,7 +883,6 @@ function printOrderList(group = activeGroup) {
   const groupLabel = group === 'CRA' ? 'CRA' : group === 'CD' ? 'Centro Diurno' : 'Tutti i gruppi';
   const urgent = items.filter(i => i.calc.status === 'urgent').length;
   const warn = items.filter(i => i.calc.status === 'warn').length;
-  const low = items.filter(i => i.calc.status === 'low').length;
   const dateField = '<span class="date-field" aria-label="data"></span>';
 
   // Ordina per giorni residui crescenti (0 = più urgente)
@@ -909,14 +894,17 @@ function printOrderList(group = activeGroup) {
 
   const rows = sortedPrint.map(({patient, drug, calc}) => {
     const cpTxt = calc.status === 'urgent' ? `0 ${drugUnit(drug)}` : qtyText(calc.cp, drug);
-    const daysTxt = calc.status === 'urgent' ? '0 gg' : isFinite(calc.daysLeft) ? `${calc.daysLeft} gg` : '—';
+    const daysVal = calc.status === 'urgent' ? 0 : isFinite(calc.daysLeft) ? calc.daysLeft : null;
+    const daysDisplay = daysVal === null ? '—' : daysVal === 0 ? 'ESAURITO' : `${daysVal} gg`;
+    const daysColor = daysVal === 0 ? '#C0392B' : daysVal !== null && daysVal <= 3 ? '#C0392B' : '#D35400';
     const boxTxt = packText(calc, drug);
-    const dot = calc.status === 'urgent' ? '<span class="dot dot-r">●</span>' : calc.status === 'warn' ? '<span class="dot dot-a">●</span>' : '<span class="dot dot-o">●</span>';
-    const bg = calc.status === 'urgent' ? '#fff0f0' : calc.status === 'warn' ? '#fff8f0' : '#fffbf5';
+    const dot = calc.status === 'urgent' ? '<span class="dot dot-r">●</span>' : '<span class="dot dot-a">●</span>';
+    const bg = calc.status === 'urgent' ? '#fff0f0' : '#fff8f0';
     return `<tr style="background:${bg}">
       <td class="pt-name">${esc(patient.name)}${patient.code ? `<br><span class="pt-code">${esc(patient.code)}</span>` : ''}</td>
       <td class="pt-drug">${dot} ${esc(drug.name)}</td>
-      <td class="pt-stock">${cpTxt} · ${daysTxt}<br><span class="pt-boxes">${boxTxt}</span></td>
+      <td class="pt-days" style="color:${daysColor}">${daysDisplay}</td>
+      <td class="pt-stock">${cpTxt}<br><span class="pt-boxes">${boxTxt}</span></td>
       <td class="pt-wf">${dateField}</td>
       <td class="pt-wf">${dateField}</td>
       <td class="pt-wf">${dateField}</td>
@@ -953,6 +941,7 @@ function printOrderList(group = activeGroup) {
   .pt-wf { text-align:center; min-width:122px; padding:12px 10px 8px; background:#fff; border-left:1.5px solid #B7950B; }
   .pt-notes { min-width:120px; background:#fff; }
   .date-field { display:block; width:100%; height:24px; border-bottom:2.8px solid #111; background:#fff; }
+  .pt-days { font-family:monospace; font-size:1.05rem; font-weight:900; text-align:center; white-space:nowrap; letter-spacing:-.01em; }
   .dot { font-weight:900; margin-right:3px; } .dot-r{color:#C0392B}.dot-a{color:#D35400}.dot-o{color:#D4AC0D}
   @media print { .toolbar-inv { display:none !important; } body { padding:8px 12px; } @page { margin:.7cm; size:A4 landscape; } th.th-wf, .summary { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
 </style></head><body>
@@ -962,8 +951,8 @@ function printOrderList(group = activeGroup) {
   <button class="btn-close" onclick="window.close()">✕ Chiudi</button>
 </div>
 <div class="inv-header"><div><div class="inv-title">Farmaci personali da ordinare · ${groupLabel}</div><div class="inv-sub">RicettaManager · solo farmaci in esaurimento</div></div><div class="inv-date"><strong>Generato il ${dateStr}</strong><br>alle ${timeStr}</div></div>
-<div class="summary">${items.length} farmaci da ordinare · ${urgent} esauriti · ${warn} ultima confezione · ${low} entro 10 giorni</div>
-<table><thead><tr><th style="width:14%">Paziente</th><th style="width:24%">Farmaco</th><th style="width:12%">Scorta</th><th class="th-wf" style="width:14%">Ricetta richiesta</th><th class="th-wf" style="width:14%">Ricetta prodotta</th><th class="th-wf" style="width:14%">Farmaco consegnato</th><th style="width:8%">Note</th></tr></thead><tbody>${rows}</tbody></table>
+<div class="summary">${items.length} farmaci da ordinare · ${urgent} esauriti · ${warn} in esaurimento (≤${items[0]?.drug?.threshAlert || 10} gg)</div>
+<table><thead><tr><th style="width:13%">Paziente</th><th style="width:22%">Farmaco</th><th style="width:8%;text-align:center">Giorni rimasti</th><th style="width:10%">Scorta</th><th class="th-wf" style="width:12%">Ricetta richiesta</th><th class="th-wf" style="width:12%">Ricetta prodotta</th><th class="th-wf" style="width:12%">Farmaco consegnato</th><th style="width:11%">Note</th></tr></thead><tbody>${rows}</tbody></table>
 </body></html>`;
 
   const win = window.open('', '_blank', 'width=1100,height=750');
@@ -1022,7 +1011,7 @@ function render(filterIds) {
               <div class="sdot ${s}"></div>
               <div style="min-width:0">
                 <div class="dname">${esc(drug.name)}</div>
-                <div class="ddose">${doseText(drug)} · ⚠${drug.threshAlert||14}gg 🔴${drug.threshUrgent||7}gg</div>
+                <div class="ddose">${doseText(drug)} · 🔴 alert ≤${drug.threshAlert||10}gg</div>
               </div>
             </div>
             <div class="drow-actions">
@@ -1261,8 +1250,7 @@ function openAddDrug(pid) {
   const _addPt = getP(pid);
   document.getElementById('drgPatientName').textContent = _addPt ? '👤 ' + _addPt.name : '';
   ['dName','dCpDie','dCpBox','dCpTot'].forEach(i=>document.getElementById(i).value='');
-  document.getElementById('dThreshAlert').value=14;
-  document.getElementById('dThreshUrgent').value=7;
+  document.getElementById('dThreshAlert').value=10;
   document.getElementById('dPreview').style.display='none';
   openOv('ovDrug');
 }
@@ -1276,8 +1264,7 @@ function openEditDrug(pid, did) {
   document.getElementById('dCpDie').value=d.cpDie;
   document.getElementById('dCpBox').value=d.cpBox;
   document.getElementById('dCpTot').value=Math.round(currentCp(d));
-  document.getElementById('dThreshAlert').value=d.threshAlert||14;
-  document.getElementById('dThreshUrgent').value=d.threshUrgent||7;
+  document.getElementById('dThreshAlert').value=d.threshAlert||10;
   updatePreview();
   openOv('ovDrug');
 }
@@ -1308,15 +1295,14 @@ function saveDrug() {
   const cpDie       = parseFloat(document.getElementById('dCpDie').value);
   const cpBox       = parseInt(document.getElementById('dCpBox').value);
   const cpTot       = parseInt(document.getElementById('dCpTot').value);
-  const threshAlert  = parseInt(document.getElementById('dThreshAlert').value) || 14;
-  const threshUrgent = parseInt(document.getElementById('dThreshUrgent').value) || 7;
+  const threshAlert  = parseInt(document.getElementById('dThreshAlert').value) || 10;
   if(!name||!cpDie||!cpBox||isNaN(cpTot)){alert('Compila tutti i campi.');return;}
   const p=getP(curPid);
   if(editDid){
     const d=p.drugs.find(x=>x.id===editDid);
-    Object.assign(d,{name,cpDie,cpBox,cpRemaining:cpTot,lastSync:today(),threshAlert,threshUrgent});
+    Object.assign(d,{name,cpDie,cpBox,cpRemaining:cpTot,lastSync:today(),threshAlert});
   } else {
-    p.drugs.push({id:uid(),name,cpDie,cpBox,cpRemaining:cpTot,lastSync:today(),threshAlert,threshUrgent});
+    p.drugs.push({id:uid(),name,cpDie,cpBox,cpRemaining:cpTot,lastSync:today(),threshAlert});
   }
   save(); closeOv('ovDrug'); render();
 }
