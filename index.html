@@ -227,10 +227,29 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
 .load-entry .le-del { background:none; border:none; cursor:pointer; color:var(--dim); font-size:0.8rem; padding:2px 5px; border-radius:4px; transition:all .15s; }
 .load-entry .le-del:hover { background:var(--red-bg); color:var(--red); }
 .load-empty { font-size:0.78rem; color:var(--dim); padding:8px 4px; }
+/* LOG MOVIMENTI GLOBALE */
+.rm-mov-list { display:flex; flex-direction:column; gap:6px; }
+.rm-mov-row { display:flex; justify-content:space-between; align-items:center; background:var(--surface2); border-radius:8px; padding:8px 12px; font-size:0.78rem; flex-wrap:wrap; gap:6px; }
+.rm-mov-tipo { font-family:'Inconsolata',monospace; font-size:0.65rem; font-weight:600; text-transform:uppercase; }
+.rm-mov-tipo.carico    { color:var(--green); }
+.rm-mov-tipo.rettifica { color:var(--amber); }
+.rm-mov-q { font-family:'Inconsolata',monospace; font-weight:700; }
+.rm-mov-q.pos { color:var(--green); }
+.rm-mov-q.neg { color:var(--red); }
+.rm-mov-ts { color:var(--dim); font-size:0.7rem; font-family:'Inconsolata',monospace; }
+.rm-mov-patient { font-size:0.72rem; color:var(--muted); }
+
+
+/* VERSIONE APP — etichetta fissa in basso a destra, esclusa dalla stampa */
+.app-version {
+  position:fixed; bottom:6px; right:10px; z-index:50;
+  font-family:'Inconsolata',monospace; font-size:0.65rem; color:var(--dim);
+  opacity:0.75; pointer-events:none; user-select:none;
+}
 
 /* PRINT */
 @media print {
-  header, .alert-banner, .toolbar, .drow-controls, .add-drug-btn, .pcard-actions, .drow-actions { display:none !important; }
+  header, .alert-banner, .toolbar, .drow-controls, .add-drug-btn, .pcard-actions, .drow-actions, .app-version { display:none !important; }
   body { background:#fff; color:#111; }
   .container { padding:0; max-width:100%; }
   .grid { display:block; }
@@ -330,6 +349,7 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
     <div class="clock"><div id="hDate"></div><div id="hAlert" style="color:var(--gold);font-weight:700"></div></div>
     <button class="btn btn-ghost btn-sm" onclick="openOrderList()">📋 Da ordinare</button>
     <button class="btn btn-ghost btn-sm" onclick="printInventory(activeGroup)">📄 Inventario</button>
+    <button class="btn btn-ghost btn-sm" onclick="openRmLogMovimenti()">📋 Log movimenti</button>
     <button class="btn btn-ghost btn-sm" onclick="exportData()">💾 Esporta</button>
     <button class="btn btn-ghost btn-sm" onclick="document.getElementById('importFile2').click()">📂 Importa</button>
     <input type="file" id="importFile2" accept=".json" style="display:none" onchange="importData(event)">
@@ -489,7 +509,34 @@ header { background:var(--surface); border-bottom:1px solid var(--border); paddi
   </div>
 </div>
 
+<!-- MODAL LOG MOVIMENTI RM -->
+<div class="overlay" id="ovRmLog" style="align-items:flex-start;padding:24px;">
+  <div class="modal" style="max-width:860px;margin:auto;">
+    <h3>📋 Log movimenti farmaci personali</h3>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+      <input class="fi" id="rmlog-filter-patient" placeholder="Filtra per paziente..." style="max-width:200px;font-size:0.82rem;" oninput="renderRmLog()">
+      <input class="fi" id="rmlog-filter-drug" placeholder="Filtra per farmaco..." style="max-width:200px;font-size:0.82rem;" oninput="renderRmLog()">
+      <select class="fi" id="rmlog-filter-tipo" style="max-width:150px;font-size:0.82rem;" onchange="renderRmLog()">
+        <option value="">Tutti i tipi</option>
+        <option value="carico">Carico</option>
+        <option value="rettifica">Rettifica</option>
+      </select>
+    </div>
+    <div id="rm-log-content" style="max-height:60vh;overflow-y:auto;"></div>
+    <div class="mfooter">
+      <button class="btn btn-ghost btn-sm" onclick="stampaRmLog()">🖨 Stampa log</button>
+      <button class="btn btn-ghost" onclick="closeOv('ovRmLog')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<!-- VERSIONE APP (popolata da APP_VERSION in INIT) -->
+<div class="app-version" id="app-version"></div>
+
 <script>
+// ── VERSIONE APP — aggiornare ad ogni rilascio (visibile nel footer) ───────
+const APP_VERSION = 'v1.1 — 13/06/2026';
+
 // ── STATE ──────────────────────────────────────────────────────────────────
 // Drug model:
 //   name, cpDie, cpBox, cpRemaining (source of truth, float),
@@ -1133,9 +1180,25 @@ function toggleSuspend(pid) {
 // Sync cpRemaining to current real value, then apply delta, reset lastSync=today
 function syncAndAdjust(pid, did, deltaCp) {
   const d = getP(pid).drugs.find(x=>x.id===did);
+  const p = getP(pid);
   const now = currentCp(d);
   d.cpRemaining = Math.max(0, now + deltaCp);
   d.lastSync = today();
+  // Log nel registro globale movimenti
+  const _ts = new Date();
+  const rmLog = JSON.parse(appStorage.getItem('rm3_movlog') || '[]');
+  rmLog.unshift({
+    id: uid(),
+    timestamp: _ts.toISOString(),
+    data: today(),
+    tipo: deltaCp > 0 ? 'carico' : 'rettifica',
+    patientId: pid,
+    patientName: p ? p.name : '—',
+    drugId: did,
+    drugName: d.name,
+    quantita: Math.round(deltaCp * 10) / 10,
+  });
+  appStorage.setItem('rm3_movlog', JSON.stringify(rmLog));
   save(); render();
 }
 
@@ -1143,7 +1206,8 @@ function addBox(pid, did) {
   const d = getP(pid).drugs.find(x=>x.id===did);
   // Log the load event
   if (!d.loadHistory) d.loadHistory = [];
-  d.loadHistory.unshift({ date: today(), boxes: 1 });
+  const _now = new Date();
+  d.loadHistory.unshift({ date: today(), timestamp: _now.toISOString(), boxes: 1 });
   syncAndAdjust(pid, did, d.cpBox);
 }
 
@@ -1178,12 +1242,18 @@ function renderHistoryLog(pid, did) {
     el.innerHTML = '<div class="load-empty">Nessun caricamento registrato.<br>Usa il pulsante <strong>＋ 1 conf.</strong> per tracciare le confezioni aggiunte.</div>';
     return;
   }
-  el.innerHTML = log.map((entry, i) => `
+  el.innerHTML = log.map((entry, i) => {
+    const ts = entry.timestamp ? new Date(entry.timestamp) : null;
+    const dataStr = ts
+      ? ts.toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'}) + ' ' + ts.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})
+      : new Date(entry.date+'T12:00').toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'});
+    return `
     <div class="load-entry">
       <span>📦 +${entry.boxes} confezione${entry.boxes>1?'i':''}</span>
-      <span class="le-date">${new Date(entry.date+'T12:00').toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'})}</span>
+      <span class="le-date">${dataStr}</span>
       <button class="le-del" onclick="deleteHistoryEntry('${pid}','${did}',${i})" title="Elimina voce">✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function deleteHistoryEntry(pid, did, idx) {
@@ -1582,11 +1652,106 @@ function checkAutoBackup() {
   } catch(e) { console.warn('Backup automatico fallito:', e); }
 }
 
+
+// ── LOG MOVIMENTI GLOBALE ─────────────────────────────────────────────────
+function getRmLog() {
+  try { return JSON.parse(appStorage.getItem('rm3_movlog') || '[]'); }
+  catch(e) { return []; }
+}
+
+function openRmLogMovimenti() {
+  renderRmLog();
+  openOv('ovRmLog');
+}
+
+function renderRmLog() {
+  const log = getRmLog();
+  const fPat  = (document.getElementById('rmlog-filter-patient').value||'').toLowerCase().trim();
+  const fDrug = (document.getElementById('rmlog-filter-drug').value||'').toLowerCase().trim();
+  const fTipo = (document.getElementById('rmlog-filter-tipo').value||'');
+  const filtered = log.filter(m => {
+    if (fPat  && !(m.patientName||'').toLowerCase().includes(fPat))  return false;
+    if (fDrug && !(m.drugName||'').toLowerCase().includes(fDrug))     return false;
+    if (fTipo && m.tipo !== fTipo) return false;
+    return true;
+  });
+  const el = document.getElementById('rm-log-content');
+  if (!filtered.length) {
+    el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">Nessun movimento registrato</p>';
+    return;
+  }
+  el.innerHTML = '<div class="rm-mov-list">' + filtered.map(m => {
+    const segno = m.quantita >= 0 ? '+' : '';
+    const tsStr = m.timestamp
+      ? new Date(m.timestamp).toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'})
+        + ' ' + new Date(m.timestamp).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})
+      : (m.data||'—');
+    return `<div class="rm-mov-row">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span class="rm-mov-tipo ${m.tipo}">${m.tipo.toUpperCase()}</span>
+        <span style="font-weight:700">${m.drugName||'—'}</span>
+        <span class="rm-mov-patient">· ${m.patientName||'—'}</span>
+        ${m.note ? `<span style="color:var(--muted);font-size:0.72rem">· ${m.note}</span>` : ''}
+      </div>
+      <div style="display:flex;gap:14px;align-items:center">
+        <span class="rm-mov-q ${m.quantita>=0?'pos':'neg'}">${segno}${m.quantita} uni</span>
+        <span class="rm-mov-ts">${tsStr}</span>
+      </div>
+    </div>`;
+  }).join('') + '</div>';
+}
+
+function stampaRmLog() {
+  const log = getRmLog();
+  const oggi = new Date().toLocaleDateString('it-IT');
+  const fPat  = (document.getElementById('rmlog-filter-patient').value||'').toLowerCase().trim();
+  const fDrug = (document.getElementById('rmlog-filter-drug').value||'').toLowerCase().trim();
+  const fTipo = (document.getElementById('rmlog-filter-tipo').value||'');
+  const filtered = log.filter(m => {
+    if (fPat  && !(m.patientName||'').toLowerCase().includes(fPat))  return false;
+    if (fDrug && !(m.drugName||'').toLowerCase().includes(fDrug))     return false;
+    if (fTipo && m.tipo !== fTipo) return false;
+    return true;
+  });
+  const righe = filtered.map(m => {
+    const tsStr = m.timestamp
+      ? new Date(m.timestamp).toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'})
+        + ' ' + new Date(m.timestamp).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})
+      : (m.data||'—');
+    return `<tr>
+      <td>${tsStr}</td>
+      <td>${m.tipo.toUpperCase()}</td>
+      <td>${m.patientName||'—'}</td>
+      <td>${m.drugName||'—'}</td>
+      <td style="text-align:right">${m.quantita>=0?'+':''}${m.quantita} uni</td>
+    </tr>`;
+  }).join('');
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Log Movimenti RicettaManager</title>
+  <style>
+    body{font-family:'Times New Roman',serif;padding:15mm;}
+    h1{font-size:13pt;margin-bottom:2mm;}
+    p{font-size:8pt;color:#555;margin-bottom:6mm;}
+    table{width:100%;border-collapse:collapse;font-size:8pt;}
+    th{border:1px solid #000;padding:2mm;background:#f0f0f0;text-align:left;}
+    td{border:1px solid #000;padding:2mm;}
+    @page{size:A4;margin:10mm;}
+  </style></head><body>
+  <h1>Log Movimenti Farmaci Personali — RicettaManager</h1>
+  <p>Stampato il: ${oggi} · ${filtered.length} movimenti</p>
+  <table><thead><tr><th>Data/Ora</th><th>Tipo</th><th>Paziente</th><th>Farmaco</th><th>Quantità</th></tr></thead>
+  <tbody>${righe}</tbody></table>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+}
+
 // ── AUTO REFRESH ogni ora ─────────────────────────────────────────────────
 setInterval(()=>{render();updateHeader();},3600000);
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 updateHeader();
+// Versione app visibile nel footer
+document.getElementById('app-version').textContent = 'RicettaManager ' + APP_VERSION;
 // Login solo su schermi larghi (PC) — su iPhone schermo ≤430px nessun login
 const isMobile = window.innerWidth <= 430;
 if (isMobile || checkSession()) {
